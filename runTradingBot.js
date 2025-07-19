@@ -76,6 +76,7 @@ async function runTradingBot() {
         if (signal.signal === 'Buy' && !tradedTokens.has(tokenSymbol)) {
 
           if (!tokenMap[tokenSymbol]) {
+            console.log("adding token", tokenSymbol, tokenAddress);
             tokenMap[tokenSymbol] = tokenAddress;
             const addTx = await contractInstance.connect(ownerSigner).addNewAsset(tokenSymbol, tokenAddress);
             await addTx.wait();
