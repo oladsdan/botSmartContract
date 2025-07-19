@@ -5,14 +5,17 @@ import { ethers, parseUnits, formatUnits } from 'ethers';
 // import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json";
 // import PancakeSwapRouterABI from "./contracts/PancakeSwapRouterABI.json";
 import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json" assert { type: "json" };
-import PancakeSwapRouterABI from "./contracts/PancakeSwapRouterABI.json" assert { type: "json" };
+import PancakeSwapRouterABI from "./contracts/PancakeswapRouterABI.json" assert { type: "json" };
 import {tokenMap} from './config/tokenMap.js';
 import dotenv from 'dotenv';
+import fa from 'fs/promises';
 
 dotenv.config();
 
 // --- Configurable Constants ---
 const SIGNAL_ENDPOINT = "https://bot.securearbitrage.com/api/signals";
+
+const STATE_FILE = './botState.json'; //file to store bot state
 
 const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC_URL);
 const ownerSigner = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
@@ -23,12 +26,21 @@ const contractInstance = new ethers.Contract(
   ownerSigner
 );
 
+global.botStateLoaded = false;
+
 const BASE_TOKEN = 'BUSD';
 const BASE_TOKEN_ADDRESS = tokenMap[BASE_TOKEN].toLowerCase();
 const PROFIT_TARGET_PERCENT = 1.6;
-const tradedTokens = new Set();
+
+//Bots internal state variables
+
 let currentHolding = null;
 let boughtPrice = null;
+const tradedTokens = new Set();
+let initialBUSDApprovalSet = false; // Flag for initial BUSD approval
+
+
+
 
 
 // // function to get the current nonce
@@ -63,17 +75,84 @@ async function sendTransaction(transactionPromise, transactionName) {
   return false; // Default return for nonce errors or already allowed
 }
 
-async function runTradingBot() {
+async function loadBotState() {
   try {
-    await sendTransaction(contractInstance.setAssets(BASE_TOKEN_ADDRESS), `Setting approval for ${BASE_TOKEN}`);
-  } catch (err) {
-    // If it's just that it's already approved, it's fine.
-    if (!err.message.includes('ERC20: approve amount exceeds allowance')) { // Example error message if already approved
-        console.error(`❌ Initial approval for ${BASE_TOKEN} failed:`, err.message);
+    const data = await fs.readFile(STATE_FILE, 'utf8');
+    const state = JSON.parse(data);
+
+    currentHolding = state.currentHolding;
+    boughtPrice = state.boughtPrice;
+    tradedTokens = new Set(state.tradedTokens); // Convert array back to Set
+    initialBUSDApprovalSet = state.initialBUSDApprovalSet; // Load the flag
+
+    console.log('✅ Bot state loaded successfully.');
+    if (currentHolding) {
+        console.log(`Resuming with current holding: ${currentHolding} (bought at ${boughtPrice})`);
+    }
+    console.log(`Previously traded tokens: ${[...tradedTokens].join(', ')}`);
+
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.log('ℹ️ No existing bot state file found. Starting fresh.');
     } else {
-        console.log(`ℹ️ ${BASE_TOKEN} already approved.`);
+      console.error('❌ Error loading bot state:', error.message);
     }
   }
+}
+
+async function saveBotState() {
+  try {
+    const state = {
+      currentHolding,
+      boughtPrice,
+      tradedTokens: [...tradedTokens], // Convert Set to Array for JSON serialization
+      initialBUSDApprovalSet // Save the flag
+    };
+    await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+    console.log('💾 Bot state saved.');
+  } catch (error) {
+    console.error('❌ Error saving bot state:', error.message);
+  }
+}
+
+async function runTradingBot() {
+
+  //Load State only once when bot starts
+   if (!global.botStateLoaded) { 
+    await loadBotState();
+    global.botStateLoaded = true;
+  }
+
+  if (!initialBUSDApprovalSet) {
+    try {
+      const approvalTxSuccess = await sendTransaction(contractInstance.setAssets(BASE_TOKEN_ADDRESS), `Initial approval for ${BASE_TOKEN}`);
+      if (approvalTxSuccess) {
+        initialBUSDApprovalSet = true;
+      }
+    } catch (err) {
+      if (err.message.includes('ERC20: approve amount exceeds allowance') || err.message.includes('already approved')) {
+        console.log(`ℹ️ ${BASE_TOKEN} already approved, continuing...`);
+        initialBUSDApprovalSet = true;
+      } else {
+        console.error(`❌ Critical: Failed initial approval for ${BASE_TOKEN}:`, err.message);
+        // Consider stopping the bot if this is a critical error
+        // throw err;
+      }
+    }
+  }
+
+
+
+  // try {
+  //   // await sendTransaction(contractInstance.setAssets(BASE_TOKEN_ADDRESS), `Setting approval for ${BASE_TOKEN}`);
+  // } catch (err) {
+  //   // If it's just that it's already approved, it's fine.
+  //   if (!err.message.includes('ERC20: approve amount exceeds allowance')) { // Example error message if already approved
+  //       console.error(`❌ Initial approval for ${BASE_TOKEN} failed:`, err.message);
+  //   } else {
+  //       console.log(`ℹ️ ${BASE_TOKEN} already approved.`);
+  //   }
+  // }
 
 
   try {
@@ -110,6 +189,7 @@ async function runTradingBot() {
               tradedTokens.add(currentHolding);
               currentHolding = null;
               boughtPrice = null;
+              await saveBotState(); //save state after success
             }
           } else {
             console.log(`⏳ ${currentHolding} not profitable yet: ${profitPercent.toFixed(2)}%`);
@@ -120,6 +200,8 @@ async function runTradingBot() {
       } else {
         console.log(`ℹ️ No ${currentHolding} balance to sell.`);
         currentHolding = null; // Clear holding if balance is zero
+        boughtPrice = null;
+        await saveBotState();
       }
     }
 
@@ -185,6 +267,7 @@ async function runTradingBot() {
             boughtPrice = await getTokenPrice(tokenOutAddress, BASE_TOKEN_ADDRESS);
             currentHolding = tokenSymbol;
             console.log(`✅ Bought ${tokenSymbol} at price ${boughtPrice}`);
+            await saveBotState(); // save after bought
             break; // Exit loop after successful buy
           }
         } else {
