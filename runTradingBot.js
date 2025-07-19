@@ -1,7 +1,9 @@
 import axios from 'axios';
-import { ethers } from 'ethers';
+// import { ethers } from 'ethers';
+import { ethers, parseUnits, formatUnits } from 'ethers';
 // import { contractInstance, tokenMap, provider, ownerSigner } from './contractConfig.js'; // assumed setup
 import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json";
+import PancakeSwapRouterABI from "./contracts/PancakeSwapRouterABI.json";
 import tokenMap from './config/tokenMap.js';
 
 
@@ -28,6 +30,7 @@ let boughtPrice = null;
 async function runTradingBot() {
   try {
     const signalRes = await axios.get(SIGNAL_ENDPOINT);
+    console.log(signalRes);
     const signals = signalRes.data;
 
     // Selling logic
@@ -106,15 +109,28 @@ async function runTradingBot() {
 }
 
 async function getTokenPrice(tokenA, tokenB) {
+  // try {
+  //   const path = [tokenA, tokenB];
+  //   const amountIn = ethers.utils.parseUnits('1', 18);
+  //   const amountsOut = await contractInstance.pancakeSwapRouter().getAmountsOut(amountIn, path);
+  //   return parseFloat(ethers.utils.formatUnits(amountsOut[1], 18));
+  // } catch (e) {
+  //   console.warn(`⚠️ getTokenPrice fallback triggered for ${tokenA}/${tokenB}`);
+  //   return null;
+  // }
   try {
+    const pancakeRouterAddress = await contractInstance.pancakeSwapRouter();
+    const router = new ethers.Contract(pancakeRouterAddress, PancakeSwapRouterABI, provider);
     const path = [tokenA, tokenB];
-    const amountIn = ethers.utils.parseUnits('1', 18);
-    const amountsOut = await contractInstance.pancakeSwapRouter().getAmountsOut(amountIn, path);
-    return parseFloat(ethers.utils.formatUnits(amountsOut[1], 18));
+    const amountIn = parseUnits('1', 18);
+    const amountsOut = await router.getAmountsOut(amountIn, path);
+    return parseFloat(formatUnits(amountsOut[1], 18));
   } catch (e) {
-    console.warn(`⚠️ getTokenPrice fallback triggered for ${tokenA}/${tokenB}`);
+    console.warn(`⚠️ getTokenPrice fallback triggered for ${tokenA}/${tokenB}:`, e.message);
     return null;
   }
+
+
 }
 
 export default runTradingBot;

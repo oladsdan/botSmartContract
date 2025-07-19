@@ -16,7 +16,7 @@ async function loopBot() {
     } catch (err) {
       console.error("[FATAL ERROR] Trading bot loop failed:", err);
     }
-    await new Promise((res) => setTimeout(res, 5000)); // 30s delay
+    await new Promise((res) => setTimeout(res, 5000)); // 5s delay
   }
 }
 
