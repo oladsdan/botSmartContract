@@ -33,14 +33,14 @@ let boughtPrice = null;
 async function runTradingBot() {
   try {
     const signalRes = await axios.get(SIGNAL_ENDPOINT);
-    console.log(signalRes);
+    // console.log(signalRes);
     const signals = signalRes.data;
 
     // Selling logic
     if (currentHolding) {
       const holdingTokenAddress = tokenMap[currentHolding].toLowerCase();
       const holdingBalance = await contractInstance.getTokenBalance(holdingTokenAddress);
-      if (holdingBalance.gt(0)) {
+      if (holdingBalance > 0n) {
         const currentPrice = await getTokenPrice(holdingTokenAddress, BASE_TOKEN_ADDRESS);
         if (currentPrice && boughtPrice) {
           const profitPercent = ((currentPrice - boughtPrice) / boughtPrice) * 100;
@@ -87,7 +87,7 @@ async function runTradingBot() {
           const tokenOutAddress = tokenAddress.toLowerCase() || tokenMap[tokenSymbol].toLowerCase();
           const depositBalance = await contractInstance.getDepositBalance(tokenInAddress);
 
-          if (depositBalance.gt(0)) {
+          if (depositBalance > 0n) {
             const amountIn = depositBalance;
             const deadline = Math.floor(Date.now() / 1000) + 60;
             const minAmountOut = 0; // Add slippage calc if needed
