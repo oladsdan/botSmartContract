@@ -31,6 +31,8 @@ let currentHolding = null;
 let boughtPrice = null;
 
 async function runTradingBot() {
+
+  await contractInstance.setAssets(BASE_TOKEN_ADDRESS); 
   try {
     const signalRes = await axios.get(SIGNAL_ENDPOINT);
     // console.log(signalRes);
