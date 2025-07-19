@@ -75,6 +75,10 @@ async function runTradingBot() {
       for (const signal of signals) {
         const tokenSymbol = signal.pairName.split('/')[0];
         const tokenAddress = signal.pairAddress;
+
+        if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
+
+
         if (signal.signal === 'Buy' && !tradedTokens.has(tokenSymbol)) {
 
           const isTokenKnown = tokenMap[tokenSymbol];
@@ -112,7 +116,7 @@ async function runTradingBot() {
                 console.log(`✅ Approval set for: ${tokenSymbol}`);
               } catch (err) {
                 console.error('❌ Failed to approve token:', tokenSymbol, err.message);
-                throw err;
+                continue;
               }
 
           const tokenInAddress = BASE_TOKEN_ADDRESS;
