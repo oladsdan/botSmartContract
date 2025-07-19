@@ -19,7 +19,7 @@ const contractInstance = new ethers.Contract(
 );
 
 const BASE_TOKEN = 'BUSD';
-const BASE_TOKEN_ADDRESS = tokenMap[BASE_TOKEN];
+const BASE_TOKEN_ADDRESS = tokenMap[BASE_TOKEN].toLowerCase();
 const PROFIT_TARGET_PERCENT = 1.6;
 const tradedTokens = new Set();
 let currentHolding = null;
@@ -32,7 +32,7 @@ async function runTradingBot() {
 
     // Selling logic
     if (currentHolding) {
-      const holdingTokenAddress = tokenMap[currentHolding];
+      const holdingTokenAddress = tokenMap[currentHolding].toLowerCase();
       const holdingBalance = await contractInstance.getTokenBalance(holdingTokenAddress);
       if (holdingBalance.gt(0)) {
         const currentPrice = await getTokenPrice(holdingTokenAddress, BASE_TOKEN_ADDRESS);
@@ -78,7 +78,7 @@ async function runTradingBot() {
           }
 
           const tokenInAddress = BASE_TOKEN_ADDRESS;
-          const tokenOutAddress = tokenAddress;
+          const tokenOutAddress = tokenMap[tokenSymbol].toLowerCase();
           const depositBalance = await contractInstance.getDepositBalance(tokenInAddress);
 
           if (depositBalance.gt(0)) {
