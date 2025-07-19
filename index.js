@@ -20,7 +20,7 @@
 //   }
 // }
 
-loopBot();
+// loopBot();
 
 import runTradingBot from './runTradingBot.js';
 import dotenv from 'dotenv';
