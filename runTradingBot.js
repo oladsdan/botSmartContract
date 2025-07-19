@@ -75,14 +75,43 @@ async function runTradingBot() {
         const tokenAddress = signal.pairAddress;
         if (signal.signal === 'Buy' && !tradedTokens.has(tokenSymbol)) {
 
-          if (!tokenMap[tokenSymbol]) {
-            console.log("adding token", tokenSymbol, tokenAddress);
-            tokenMap[tokenSymbol] = tokenAddress;
-            const addTx = await contractInstance.connect(ownerSigner).addNewAsset(tokenSymbol, tokenAddress);
-            await addTx.wait();
-            const approvalTx = await contractInstance.connect(ownerSigner).setAssets(tokenAddress);
-            await approvalTx.wait();
+          const isTokenKnown = tokenMap[tokenSymbol];
+          // if (!tokenMap[tokenSymbol]) {
+          //   console.log("adding token", tokenSymbol, tokenAddress);
+          //   tokenMap[tokenSymbol] = tokenAddress;
+          //   const addTx = await contractInstance.connect(ownerSigner).addNewAsset(tokenSymbol, tokenAddress);
+          //   await addTx.wait();
+          //   const approvalTx = await contractInstance.connect(ownerSigner).setAssets(tokenAddress);
+          //   await approvalTx.wait();
+          // }
+          if (!isTokenKnown) {
+            tokenMap[tokenSymbol] = tokenAddress; // Add to local map
           }
+
+
+          try {
+          // Always try to add to smart contract allowed list (won’t fail on already added)
+          const addTx = await contractInstance.connect(ownerSigner).addNewAsset(tokenSymbol, tokenAddress);
+          await addTx.wait();
+          console.log(`✅ Token added to allowed list: ${tokenSymbol}`);
+           } catch (err) {
+              if (!err.message.includes('already allowed')) {
+                console.error('❌ Failed to add token:', tokenSymbol, err.message);
+                throw err;
+              } else {
+                console.log(`ℹ️ Token already allowed: ${tokenSymbol}`);
+              }
+            }
+
+              // Ensure approval is set
+              try {
+                const approvalTx = await contractInstance.connect(ownerSigner).setAssets(tokenAddress);
+                await approvalTx.wait();
+                console.log(`✅ Approval set for: ${tokenSymbol}`);
+              } catch (err) {
+                console.error('❌ Failed to approve token:', tokenSymbol, err.message);
+                throw err;
+              }
 
           const tokenInAddress = BASE_TOKEN_ADDRESS;
           const tokenOutAddress = tokenAddress.toLowerCase() || tokenMap[tokenSymbol].toLowerCase();
