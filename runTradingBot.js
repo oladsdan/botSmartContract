@@ -2,14 +2,15 @@ import axios from 'axios';
 // import { ethers } from 'ethers';
 import { ethers, parseUnits, formatUnits } from 'ethers';
 // import { contractInstance, tokenMap, provider, ownerSigner } from './contractConfig.js'; // assumed setup
-import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json";
-import PancakeSwapRouterABI from "./contracts/PancakeSwapRouterABI.json";
-import tokenMap from './config/tokenMap.js';
+// import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json";
+// import PancakeSwapRouterABI from "./contracts/PancakeSwapRouterABI.json";
+import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json" assert { type: "json" };
+import PancakeSwapRouterABI from "./contracts/PancakeSwapRouterABI.json" assert { type: "json" };
+import {tokenMap} from './config/tokenMap.js';
 
 
 // --- Configurable Constants ---
 const SIGNAL_ENDPOINT = "https://bot.securearbitrage.com/api/signals";
-
 
 const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC_URL);
 const ownerSigner = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
@@ -81,7 +82,7 @@ async function runTradingBot() {
           }
 
           const tokenInAddress = BASE_TOKEN_ADDRESS;
-          const tokenOutAddress = tokenMap[tokenSymbol].toLowerCase();
+          const tokenOutAddress = tokenAddress.toLowerCase() || tokenMap[tokenSymbol].toLowerCase();
           const depositBalance = await contractInstance.getDepositBalance(tokenInAddress);
 
           if (depositBalance.gt(0)) {
