@@ -7,7 +7,9 @@ import { ethers, parseUnits, formatUnits } from 'ethers';
 import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json" assert { type: "json" };
 import PancakeSwapRouterABI from "./contracts/PancakeSwapRouterABI.json" assert { type: "json" };
 import {tokenMap} from './config/tokenMap.js';
+import dotenv from 'dotenv';
 
+dotenv.config();
 
 // --- Configurable Constants ---
 const SIGNAL_ENDPOINT = "https://bot.securearbitrage.com/api/signals";
