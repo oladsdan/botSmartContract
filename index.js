@@ -4,23 +4,51 @@ import runTradingBot from "./runTradingBot.js";
 
 dotenv.config();
 
+const LOOP_INTERVAL_MS = 10000; // 10seconds
 
-
-// Token mapping (symbol -> address)
-
-
+let isRunning = false;
 async function loopBot() {
-  while (true) {
-    try {
-      await runTradingBot();
-    } catch (err) {
-      console.error("[FATAL ERROR] Trading bot loop failed:", err);
-    }
-    await new Promise((res) => setTimeout(res, 10000)); // 5s delay
+  if (isRunning) {
+    console.log('⏳ Still running... skipping this cycle');
+    return;
+  }
+
+  isRunning = true;
+  try {
+    console.log(`\n⏱️ Running Trading Bot @ ${new Date().toLocaleTimeString()}`);
+    await runTradingBot();
+  } catch (err) {
+    console.error("[FATAL ERROR] Trading bot loop failed:", err.message || err);
+  } finally {
+    isRunning = false;
   }
 }
-
+// Start loop
+console.log('🚀 Automated Trading Bot Started');
+// Run immediately and then at intervals
 loopBot();
+setInterval(loopBot, LOOP_INTERVAL_MS);
+
+// Start loop
+// console.log('🚀 Automated Trading Bot Started');
+// // Run immediately and then at intervals
+// loopBot();
+// setInterval(loopBot, LOOP_INTERVAL_MS);
+// // Token mapping (symbol -> address)
+
+
+// async function loopBot() {
+//   while (true) {
+//     try {
+//       await runTradingBot();
+//     } catch (err) {
+//       console.error("[FATAL ERROR] Trading bot loop failed:", err);
+//     }
+//     await new Promise((res) => setTimeout(res, 10000)); // 5s delay
+//   }
+// }
+
+// loopBot();
 
 // import runTradingBot from './runTradingBot.js';
 // import dotenv from 'dotenv';
