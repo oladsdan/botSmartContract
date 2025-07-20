@@ -53,7 +53,7 @@ let initialBUSDApprovalSet = false; // Flag for initial BUSD approval
 //     throw error;
 //   }
 // }
-async function getMinAmountOut(tokenIn, tokenOut, amountIn, slippagePercent = 1) {
+async function getMinAmountOut(tokenIn, tokenOut, amountIn, slippagePercent = 5) {
   try {
     const pancakeRouterAddress = await contractInstance.pancakeSwapRouter();
     const router = new ethers.Contract(pancakeRouterAddress, PancakeSwapRouterABI, provider);
@@ -271,8 +271,8 @@ async function runTradingBot() {
         if (depositBalance > 0n) {
           const amountIn = depositBalance;
           const deadline = Math.floor(Date.now() / 1000) + 60; // 60 seconds from now
-          const minAmountOut = getMinAmountOut(tokenInAddress, tokenOutAddress, amountIn); // Add slippage calc if needed
-
+          // const minAmountOut = getMinAmountOut(tokenInAddress, tokenOutAddress, amountIn); // Add slippage calc if needed
+          const minAmountOut =0;
           console.log(`Attempting to buy ${tokenSymbol} with ${formatUnits(amountIn, 18)} ${BASE_TOKEN}...`); // Assuming 18 decimals for BUSD
 
           const buySuccess = await sendTransaction(
