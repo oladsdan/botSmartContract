@@ -92,6 +92,30 @@ async function sendTransaction(transactionPromise, transactionName) {
   return false; // Default return for nonce errors or already allowed
 }
 
+// async function sendTransaction(transactionPromise, transactionName) {
+//   try {
+//     const tx = await transactionPromise;
+//     await tx.wait();
+//     console.log(`✅ ${transactionName} successful! Transaction hash: ${tx.hash}`);
+//     return true;
+//   } catch (error) {
+//     if (error.code === 'NONCE_EXPIRED' || error.message.includes('nonce too low')) {
+//       console.warn(`⚠️ Nonce error for ${transactionName}. This might resolve on next attempt or a restart.`);
+//       return false; // Treat nonce errors as non-success for this attempt
+//     } else if (error.code === 'CALL_EXCEPTION') {
+//       console.error(`❌ Failed to complete ${transactionName}: Contract execution reverted. Details: ${error.message}`);
+//       return false; // Explicitly return false for contract reverts
+//     } else if (error.message.includes('already allowed') || error.message.includes('Token already allowed') || error.message.includes('approve amount exceeds allowance')) {
+//       console.log(`ℹ️ Token already allowed/approved: ${transactionName.split(':')[1]?.trim() || transactionName}`);
+//       return false; // Indicate that it was already allowed/approved
+//     } else {
+//       console.error(`❌ Failed to complete ${transactionName}:`, error.message);
+//       throw error; // Re-throw other unexpected errors
+//     }
+//   }
+// }
+
+
 async function loadBotState() {
   try {
     const data = await fs.readFile(STATE_FILE, 'utf8');
@@ -286,9 +310,13 @@ async function runTradingBot() {
             console.log(`✅ Bought ${tokenSymbol} at price ${boughtPrice}`);
             await saveBotState(); // save after bought
             break; // Exit loop after successful buy
+          } else {
+             console.log(`ℹ️ Buy attempt for ${tokenSymbol} failed. Adding to tradedTokens for this session.`);
+            tradedTokens.add(tokenSymbol); // Mark as tried and failed for this session
+            await saveBotState(); // 
           }
         } else {
-          console.log(`Insufficient ${BASE_TOKEN} balance to buy ${tokenSymbol}.`);
+          console.log(`Insufficient ${BASE_TOKEN} balance (${formatUnits(depositBalance, 18)}) to buy ${tokenSymbol}.`);
         }
       }
     }
