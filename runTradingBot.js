@@ -53,6 +53,23 @@ let initialBUSDApprovalSet = false; // Flag for initial BUSD approval
 //     throw error;
 //   }
 // }
+async function getMinAmountOut(tokenIn, tokenOut, amountIn, slippagePercent = 1) {
+  try {
+    const pancakeRouterAddress = await contractInstance.pancakeSwapRouter();
+    const router = new ethers.Contract(pancakeRouterAddress, PancakeSwapRouterABI, provider);
+    const amountsOut = await router.getAmountsOut(amountIn, [tokenIn, tokenOut]);
+
+    const expectedOut = amountsOut[1];
+    const slippage = expectedOut * BigInt(slippagePercent * 100) / 10000n; // 1%
+    const minOut = expectedOut - slippage;
+
+    return minOut;
+  } catch (e) {
+    console.error("❌ Failed to get minAmountOut:", e.message);
+    return 0n;
+  }
+}
+
 
 async function sendTransaction(transactionPromise, transactionName) {
   try {
@@ -169,7 +186,7 @@ async function runTradingBot() {
         if (currentPrice && boughtPrice) {
           const profitPercent = ((currentPrice - boughtPrice) / boughtPrice) * 100;
           if (profitPercent >= PROFIT_TARGET_PERCENT) {
-            const minAmountOut = 0; // use slippage logic if needed
+            const minAmountOut = getMinAmountOut(holdingTokenAddress, BASE_TOKEN_ADDRESS, holdingBalance, 2); // use slippage logic if needed
             const deadline = Math.floor(Date.now() / 1000) + 60; // 60 seconds from now
 
             console.log(`Attempting to sell ${currentHolding}...`);
@@ -254,7 +271,7 @@ async function runTradingBot() {
         if (depositBalance > 0n) {
           const amountIn = depositBalance;
           const deadline = Math.floor(Date.now() / 1000) + 60; // 60 seconds from now
-          const minAmountOut = 0; // Add slippage calc if needed
+          const minAmountOut = getMinAmountOut(tokenInAddress, tokenOutAddress, amountIn); // Add slippage calc if needed
 
           console.log(`Attempting to buy ${tokenSymbol} with ${formatUnits(amountIn, 18)} ${BASE_TOKEN}...`); // Assuming 18 decimals for BUSD
 
