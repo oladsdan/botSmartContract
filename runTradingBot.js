@@ -8,7 +8,7 @@ import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json" ass
 import PancakeSwapRouterABI from "./contracts/PancakeswapRouterABI.json" assert { type: "json" };
 import {tokenMap} from './config/tokenMap.js';
 import dotenv from 'dotenv';
-import fa from 'fs/promises';
+import fs from 'fs/promises';
 
 dotenv.config();
 
