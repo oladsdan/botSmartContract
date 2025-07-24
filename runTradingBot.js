@@ -115,6 +115,44 @@ async function sendTransaction(transactionPromise, transactionName) {
 //   }
 // }
 
+function shouldExecuteBuy(signal) {
+    const tokenSymbol = signal.pairName.split('/')[0];
+    const baseConditions = (
+        signal.signal === 'Buy' &&
+        !tradedTokens.has(tokenSymbol) &&
+        parseFloat(signal.currentLiquidity) > 250000 &&
+        signal.direction === 'UP'
+        // parseFloat(signal.now_diff_percent.replace('%','')) < 15.0
+    );
+    
+    if (!baseConditions) return false;
+    
+    // Advanced scoring
+    let score = 0;
+    
+    // 1. RSI scoring
+    const rsi = parseFloat(signal.rsi);
+    if (rsi > 30 && rsi < 60) score += 2;
+    else if (rsi > 25 && rsi < 65) score += 1;
+    
+    // 2. Volume momentum
+    if (parseFloat(signal.volumeIncrease) > 1.0) score += 2;
+    else if (parseFloat(signal.volumeIncrease) > 0.5) score += 1;
+    
+    // 3. Prediction consensus
+    const pred1 = parseFloat(signal.lstmPrediction);
+    const pred2 = parseFloat(signal.xgboostPrediction);
+    const current = parseFloat(signal.currentPrice);
+    const avgPred = (pred1 + pred2) / 2;
+    
+    if (Math.abs(pred1 - pred2) < (avgPred * 0.03)) score += 2; // Strong consensus
+    if (avgPred > current * 1.02) score += 1; // Predicting >2% increase
+    
+    // 4. MACD confirmation
+    if (parseFloat(signal.macd) > parseFloat(signal.macdSignal)) score += 1;
+    
+    return score >= 5; // Minimum threshold score
+}
 
 async function loadBotState() {
   try {
@@ -540,11 +578,22 @@ async function runTradingBot() {
 
     // Buying logic
     if (!currentHolding) {
-      for (const signal of signals) {
+        //   const sortedSignals = signals
+        // .filter(s => s.signal === 'Buy')
+        // .map(signal => ({
+        //   ...signal,
+        //   score: calculateBuyScore(signal) // Implement scoring function
+        // }))
+        // .sort((a, b) => b.score - a.score);
+         const prioritizedSignals = signals
+        .filter(signal => shouldExecuteBuy(signal)) // Only valid signals
+        .sort((a, b) => calculateBuyScore(b) - calculateBuyScore(a)); // Best first
+
+      for (const signal of prioritizedSignals) {
         const tokenSymbol = signal.pairName.split('/')[0];
         const tokenAddress = signal.pairAddress;
 
-        if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
+        // if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
 
         console.log(`Processing buy signal for ${tokenSymbol}...`);
 
@@ -635,6 +684,37 @@ async function getTokenPrice(tokenA, tokenB) {
   }
 
 
+}
+
+
+
+// Helper function
+function calculateBuyScore(signal) {
+  let score = 0;
+  
+  // RSI (30-60 is ideal)
+  const rsi = parseFloat(signal.rsi);
+  if (rsi > 30 && rsi < 60) score += 2;
+  
+  // Volume increasing 
+  if (parseFloat(signal.volumeIncrease) > 1.0) score += 2;
+  else if (parseFloat(signal.volumeIncrease) > 0.5) score += 1;
+  
+  // Prediction consensus
+  const pred1 = parseFloat(signal.lstmPrediction);
+  const pred2 = parseFloat(signal.xgboostPrediction);
+  const current = parseFloat(signal.currentPrice);
+  
+  if (Math.abs(pred1 - pred2) < (current * 0.00001)) score += 2;
+  if ((pred1 + pred2)/2 > current * 1.015) score += 1;
+  
+  // MACD bullish
+  if (parseFloat(signal.macd) > parseFloat(signal.macdSignal)) score += 1;
+  
+  // Liquidity bonus
+  if (parseFloat(signal.currentLiquidity) > 1000000) score += 1;
+  
+  return score;
 }
 
 export default runTradingBot;
