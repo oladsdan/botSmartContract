@@ -1,12 +1,8 @@
 import dotenv from "dotenv";
-import runTradingBot from "./runTradingBot.js";
 import cron from "node-cron";
-
+import runTradingBot from "./runTradingBot.js";
 
 dotenv.config();
-
-const LOOP_INTERVAL_MS = 10000; // 10seconds
-
 
 // Strategy Configuration
 const TRADING_WINDOWS = [
@@ -29,10 +25,9 @@ const tradingState = {
     holdingPeriodEnd: null
 };
 
-
-
+// Initialize the trading bot with strategy
 function initTradingBot() {
-    console.log('Initializing Automated Trading Bot with Scheduled Strategy');
+    console.log('🚀 Initializing Automated Trading Bot with Scheduled Strategy');
 
     // Setup trading windows
     TRADING_WINDOWS.forEach(schedule => {
@@ -81,6 +76,7 @@ function initTradingBot() {
     }, 10000); // Check every 10 seconds
 }
 
+// Execute trading cycle with strategy constraints
 async function executeTradingCycle() {
     if (!tradingState.isActive) {
         console.log('⏳ Trading window not active - skipping execution');
@@ -104,32 +100,3 @@ async function executeTradingCycle() {
 
 // Start the bot
 initTradingBot();
-
-
-
-
-
-
-// let isRunning = false;
-// async function loopBot() {
-//   if (isRunning) {
-//     console.log('⏳ Still running... skipping this cycle');
-//     return;
-//   }
-
-//   isRunning = true;
-//   try {
-//     console.log(`\n⏱️ Running Trading Bot @ ${new Date().toLocaleTimeString()}`);
-//     await runTradingBot();
-//   } catch (err) {
-//     console.error("[FATAL ERROR] Trading bot loop failed:", err.message || err);
-//   } finally {
-//     isRunning = false;
-//   }
-// }
-// // Start loop
-// console.log('🚀 Automated Trading Bot Started');
-// // Run immediately and then at intervals
-// loopBot();
-// setInterval(loopBot, LOOP_INTERVAL_MS);
-
