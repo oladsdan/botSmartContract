@@ -35,11 +35,19 @@ const STOP_LOSS_PERCENT = 0.9;
 
 //Bots internal state variables
 
-let currentHolding = null;
-let boughtPrice = null;
+// let currentHolding = null;
+// let boughtPrice = null;
 const tradedTokens = new Set();
 let initialBUSDApprovalSet = false; // Flag for initial BUSD approval
 global.botStateLoaded = false;
+
+let state = {
+  currentHolding: null,
+  boughtPrice: null,
+  tradedTokens: [],
+  tokenSettings: {}, // { TOKEN_SYMBOL: { currentTP, currentSL } }
+  initialBUSDApprovalSet: false
+};
 
 
 
@@ -154,45 +162,99 @@ function shouldExecuteBuy(signal) {
     return score >= 5; // Minimum threshold score
 }
 
+// async function loadBotState() {
+//   try {
+//     const data = await fs.readFile(STATE_FILE, 'utf8');
+//     const state = JSON.parse(data);
+
+//     currentHolding = state.currentHolding;
+//     boughtPrice = state.boughtPrice;
+//     tradedTokens = new Set(state.tradedTokens); // Convert array back to Set
+//     initialBUSDApprovalSet = state.initialBUSDApprovalSet; // Load the flag
+
+//     console.log('✅ Bot state loaded successfully.');
+//     if (currentHolding) {
+//         console.log(`Resuming with current holding: ${currentHolding} (bought at ${boughtPrice})`);
+//     }
+//     console.log(`Previously traded tokens: ${[...tradedTokens].join(', ')}`);
+
+//   } catch (error) {
+//     if (error.code === 'ENOENT') {
+//       console.log('ℹ️ No existing bot state file found. Starting fresh.');
+//     } else {
+//       console.error('❌ Error loading bot state:', error.message);
+//     }
+//   }
+// }
+
 async function loadBotState() {
   try {
     const data = await fs.readFile(STATE_FILE, 'utf8');
-    const state = JSON.parse(data);
-
-    currentHolding = state.currentHolding;
-    boughtPrice = state.boughtPrice;
-    tradedTokens = new Set(state.tradedTokens); // Convert array back to Set
-    initialBUSDApprovalSet = state.initialBUSDApprovalSet; // Load the flag
-
-    console.log('✅ Bot state loaded successfully.');
-    if (currentHolding) {
-        console.log(`Resuming with current holding: ${currentHolding} (bought at ${boughtPrice})`);
-    }
-    console.log(`Previously traded tokens: ${[...tradedTokens].join(', ')}`);
-
+    const savedState = JSON.parse(data);
+    state = {
+      ...state,
+      ...savedState,
+      tradedTokens: new Set(savedState.tradedTokens || [])
+    };
+    console.log('✅ State loaded');
   } catch (error) {
     if (error.code === 'ENOENT') {
-      console.log('ℹ️ No existing bot state file found. Starting fresh.');
+      console.log('ℹ️ No existing state file - starting fresh');
     } else {
-      console.error('❌ Error loading bot state:', error.message);
+      console.error('❌ Error loading state:', error.message);
     }
   }
 }
+
+
+// async function saveBotState() {
+//   try {
+//     const state = {
+//       currentHolding,
+//       boughtPrice,
+//       tradedTokens: [...tradedTokens], // Convert Set to Array for JSON serialization
+//       initialBUSDApprovalSet // Save the flag
+//     };
+//     await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+//     console.log('💾 Bot state saved.');
+//   } catch (error) {
+//     console.error('❌ Error saving bot state:', error.message);
+//   }
+// }
+
 
 async function saveBotState() {
   try {
-    const state = {
-      currentHolding,
-      boughtPrice,
-      tradedTokens: [...tradedTokens], // Convert Set to Array for JSON serialization
-      initialBUSDApprovalSet // Save the flag
-    };
-    await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
-    console.log('💾 Bot state saved.');
+    await fs.writeFile(STATE_FILE, JSON.stringify({
+      ...state,
+      tradedTokens: [...state.tradedTokens]
+    }, null, 2));
+    console.log('💾 State saved');
   } catch (error) {
-    console.error('❌ Error saving bot state:', error.message);
+    console.error('❌ Error saving state:', error.message);
   }
 }
+
+async function processNewSignals(signals) {
+  for (const signal of signals) {
+    const tokenSymbol = signal.pairName.split('/')[0];
+    
+    // Only update TP/SL for currently held token
+    if (state.currentHolding === tokenSymbol) {
+      const newTP = parseFloat(signal.tpPercentage);
+      let newSL = parseFloat(signal.slPercentage);
+      
+      // Update values
+      state.tokenSettings[tokenSymbol] = state.tokenSettings[tokenSymbol] || {};
+      state.tokenSettings[tokenSymbol].currentTP = newTP;
+      state.tokenSettings[tokenSymbol].currentSL = newSL;
+      
+      console.log(`🔄 Updated ${tokenSymbol} TP/SL: ${newTP}%/${newSL}%`);
+      await saveBotState();
+    }
+  }
+}
+
 
 async function executeSell(tokenSymbol, tokenAddress, reason) {
   try {
@@ -552,22 +614,28 @@ async function runTradingBot() {
     const signalRes = await axios.get(SIGNAL_ENDPOINT);
     const signals = signalRes.data;
 
+    // Process signal updates for current holding
+    await processNewSignals(signals);
+
+
     // Selling logic (including stop-loss)
-    if (currentHolding) {
+    if (state.currentHolding) {
       const holdingTokenAddress = tokenMap[currentHolding].toLowerCase();
       const currentPrice = await getTokenPrice(holdingTokenAddress, BASE_TOKEN_ADDRESS);
-      
-      if (currentPrice && boughtPrice) {
-        const profitPercent = ((currentPrice - boughtPrice) / boughtPrice) * 100;
+      const { currentTP, currentSL } = state.tokenSettings[tokenSymbol] || {};
+
+
+      if (currentPrice && state.boughtPrice) {
+        const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
         
         // Stop-loss check
-        if (profitPercent <= -STOP_LOSS_PERCENT) {
+        if (profitPercent <= -currentSL) {
           await executeSell(currentHolding, holdingTokenAddress, `stop-loss at ${profitPercent.toFixed(2)}%`);
           return;
         }
         
         // Take-profit check
-        if (profitPercent >= PROFIT_TARGET_PERCENT) {
+        if (profitPercent >= currentTP) {
           await executeSell(currentHolding, holdingTokenAddress, `profit at ${profitPercent.toFixed(2)}%`);
           return;
         }
@@ -577,7 +645,7 @@ async function runTradingBot() {
     }
 
     // Buying logic
-    if (!currentHolding) {
+    if (!state.currentHolding) {
         //   const sortedSignals = signals
         // .filter(s => s.signal === 'Buy')
         // .map(signal => ({
