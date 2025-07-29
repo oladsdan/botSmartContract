@@ -463,13 +463,13 @@ async function runTradingBot(forceExit = false) {
 
 
     // Initial BUSD approval
-      if (!state.initialBUSDApprovalSet) {
+      if (!initialBUSDApprovalSet) {
         try {
           const approvalTxSuccess = await sendTransaction(
             contractInstance.setAssets(BASE_TOKEN_ADDRESS),
             `Initial approval for ${BASE_TOKEN}`
           );
-          state.initialBUSDApprovalSet = approvalTxSuccess || initialBUSDApprovalSet;
+          initialBUSDApprovalSet = approvalTxSuccess || initialBUSDApprovalSet;
         } catch (err) {
           if (err.message.includes('ERC20: approve amount exceeds allowance')) {
             console.log(`ℹ️ ${BASE_TOKEN} already approved`);
