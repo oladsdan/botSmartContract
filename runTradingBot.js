@@ -159,7 +159,7 @@ function shouldExecuteBuy(signal) {
     // 4. MACD confirmation
     if (parseFloat(signal.macd) > parseFloat(signal.macdSignal)) score += 1;
     
-    return score >= 5; // Minimum threshold score
+    return score >= 2; // Minimum threshold score
 }
 
 // async function loadBotState() {
@@ -295,158 +295,332 @@ async function executeSell(tokenSymbol, tokenAddress, reason) {
 }
 
 
-
+let isRunning = false;
 async function runTradingBot(forceExit = false) {
-  if (!global.botStateLoaded) {
-    await loadBotState();
-    global.botStateLoaded = true;
+  if (isRunning) {
+    console.log("⏳ Bot already running — skipping this cycle");
+    return;
   }
 
-  // Initial BUSD approval
-  if (!state.initialBUSDApprovalSet) {
-    try {
-      const approvalTxSuccess = await sendTransaction(
-        contractInstance.setAssets(BASE_TOKEN_ADDRESS),
-        `Initial approval for ${BASE_TOKEN}`
-      );
-      state.initialBUSDApprovalSet = approvalTxSuccess || initialBUSDApprovalSet;
-    } catch (err) {
-      if (err.message.includes('ERC20: approve amount exceeds allowance')) {
-        console.log(`ℹ️ ${BASE_TOKEN} already approved`);
-        state.initialBUSDApprovalSet = true;
-      } else {
-        console.error(`❌ Critical: Failed initial approval for ${BASE_TOKEN}:`, err.message);
-      }
-    }
-  }
-
-  try {
-    const signalRes = await axios.get(SIGNAL_ENDPOINT);
-    const signals = signalRes.data;
-
-    // Process signal updates for current holding
-    await processNewSignals(signals);
+  isRunning = true;
+    //   if (!global.botStateLoaded) {
+    //   await loadBotState();
+    //   global.botStateLoaded = true;
 
 
-    // Selling logic (including stop-loss)
-    if (state.currentHolding) {
-      const holdingTokenAddress = tokenMap[state.currentHolding].toLowerCase();
-      const currentPrice = await getTokenPrice(holdingTokenAddress, BASE_TOKEN_ADDRESS);
-      const { currentTP, currentSL } = state.tokenSettings[state.currentHolding] || {};
+    // // Initial BUSD approval
+    //   if (!state.initialBUSDApprovalSet) {
+    //     try {
+    //       const approvalTxSuccess = await sendTransaction(
+    //         contractInstance.setAssets(BASE_TOKEN_ADDRESS),
+    //         `Initial approval for ${BASE_TOKEN}`
+    //       );
+    //       state.initialBUSDApprovalSet = approvalTxSuccess || initialBUSDApprovalSet;
+    //     } catch (err) {
+    //       if (err.message.includes('ERC20: approve amount exceeds allowance')) {
+    //         console.log(`ℹ️ ${BASE_TOKEN} already approved`);
+    //         state.initialBUSDApprovalSet = true;
+    //       } else {
+    //         console.error(`❌ Critical: Failed initial approval for ${BASE_TOKEN}:`, err.message);
+    //       }
+    //     }
+    //   }
+    // }
+
+    // try {
+    //   const signalRes = await axios.get(SIGNAL_ENDPOINT);
+    //   const signals = signalRes.data;
+
+    //   // Process signal updates for current holding
+    //   await processNewSignals(signals);
 
 
-      //force exit if 4hours lapsed
-      if(forceExit && state.currentHolding) {
-         if(currentPrice && state.boughtPrice) {
-          const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
-          await executeSell(state.currentHolding, holdingTokenAddress, `forced-sold at ${profitPercent.toFixed(2)}%`)
-         }
-         return;
-      }
+    //   // Selling logic (including stop-loss)
+    //   if (state.currentHolding) {
+    //     const holdingTokenAddress = tokenMap[state.currentHolding].toLowerCase();
+    //     const currentPrice = await getTokenPrice(holdingTokenAddress, BASE_TOKEN_ADDRESS);
+    //     const { currentTP, currentSL } = state.tokenSettings[state.currentHolding] || {};
 
 
-      if (currentPrice && state.boughtPrice) {
-        const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
-        
-        // Stop-loss check
-        if (profitPercent <= -currentSL) {
-          await executeSell(state.currentHolding, holdingTokenAddress, `stop-loss at ${profitPercent.toFixed(2)}%`);
-          return;
-        }
-        
-        // Take-profit check
-        if (profitPercent >= currentTP) {
-          await executeSell(state.currentHolding, holdingTokenAddress, `profit at ${profitPercent.toFixed(2)}%`);
-          return;
-        }
-        
-        console.log(`⏳ ${state.currentHolding}: ${profitPercent.toFixed(2)}% (TP: ${currentTP}% | SL: -${currentSL}%)`);
-      }
-    }
+    //     //force exit if 4hours lapsed
+    //     if(forceExit && state.currentHolding) {
+    //       if(currentPrice && state.boughtPrice) {
+    //         const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
+    //         await executeSell(state.currentHolding, holdingTokenAddress, `forced-sold at ${profitPercent.toFixed(2)}%`)
+    //       }
+    //       return;
+    //     }
 
-    // Buying logic
-    if (!state.currentHolding) {
-        //   const sortedSignals = signals
-        // .filter(s => s.signal === 'Buy')
-        // .map(signal => ({
-        //   ...signal,
-        //   score: calculateBuyScore(signal) // Implement scoring function
-        // }))
-        // .sort((a, b) => b.score - a.score);
-         const prioritizedSignals = signals
-        .filter(signal => shouldExecuteBuy(signal)) // Only valid signals
-        .sort((a, b) => calculateBuyScore(b) - calculateBuyScore(a)); // Best first
 
-      for (const signal of prioritizedSignals) {
-        const tokenSymbol = signal.pairName.split('/')[0];
-        const tokenAddress = signal.pairAddress;
+    //     if (currentPrice && state.boughtPrice) {
+    //       const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
+          
+    //       // Stop-loss check
+    //       if (profitPercent <= -currentSL) {
+    //         await executeSell(state.currentHolding, holdingTokenAddress, `stop-loss at ${profitPercent.toFixed(2)}%`);
+    //         return;
+    //       }
+          
+    //       // Take-profit check
+    //       if (profitPercent >= currentTP) {
+    //         await executeSell(state.currentHolding, holdingTokenAddress, `profit at ${profitPercent.toFixed(2)}%`);
+    //         return;
+    //       }
+          
+    //       console.log(`⏳ ${state.currentHolding}: ${profitPercent.toFixed(2)}% (TP: ${currentTP}% | SL: -${currentSL}%)`);
+    //     }
+    //   }
 
-        // if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
+    //   // Buying logic
+    //   if (!state.currentHolding) {
+    //       //   const sortedSignals = signals
+    //       // .filter(s => s.signal === 'Buy')
+    //       // .map(signal => ({
+    //       //   ...signal,
+    //       //   score: calculateBuyScore(signal) // Implement scoring function
+    //       // }))
+    //       // .sort((a, b) => b.score - a.score);
+    //       const prioritizedSignals = signals
+    //       .filter(signal => shouldExecuteBuy(signal)) // Only valid signals
+    //       .sort((a, b) => calculateBuyScore(b) - calculateBuyScore(a)); // Best first
 
-        console.log(`Processing buy signal for ${tokenSymbol}...`);
+    //     for (const signal of prioritizedSignals) {
+    //       const tokenSymbol = signal.pairName.split('/')[0];
+    //       const tokenAddress = signal.pairAddress;
 
-        // Add token to local map if not known
-        if (!tokenMap[tokenSymbol]) {
-          tokenMap[tokenSymbol] = tokenAddress;
-          console.log(`📝 Added ${tokenSymbol} to local tokenMap.`);
-        }
+    //       // if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
 
-        // Add to allowed tokens
+    //       console.log(`Processing buy signal for ${tokenSymbol}...`);
+
+    //       // Add token to local map if not known
+    //       if (!tokenMap[tokenSymbol]) {
+    //         tokenMap[tokenSymbol] = tokenAddress;
+    //         console.log(`📝 Added ${tokenSymbol} to local tokenMap.`);
+    //       }
+
+    //       // Add to allowed tokens
+    //       try {
+    //         await sendTransaction(
+    //           contractInstance.addNewAsset(tokenSymbol, tokenAddress),
+    //           `Adding asset: ${tokenSymbol}`
+    //         );
+    //       } catch (err) {
+    //         console.error(`❌ Failed to add ${tokenSymbol}:`, err.message);
+    //         continue;
+    //       }
+
+    //       // Set approval
+    //       try {
+    //         await sendTransaction(
+    //           contractInstance.setAssets(tokenAddress),
+    //           `Approving: ${tokenSymbol}`
+    //         );
+    //       } catch (err) {
+    //         console.error(`❌ Failed to approve ${tokenSymbol}:`, err.message);
+    //         continue;
+    //       }
+
+    //       // Execute buy
+    //       const depositBalance = await contractInstance.getDepositBalance(BASE_TOKEN_ADDRESS);
+    //       if (depositBalance > 0n) {
+    //         const deadline = Math.floor(Date.now() / 1000) + 300;
+    //         const minAmountOut = await getMinAmountOut(BASE_TOKEN_ADDRESS, tokenAddress, depositBalance, 0.5);
+
+    //         const buySuccess = await sendTransaction(
+    //           contractInstance.buyASSET(
+    //             BASE_TOKEN_ADDRESS,
+    //             depositBalance,
+    //             tokenAddress,
+    //             minAmountOut,
+    //             deadline
+    //           ),
+    //           `Buying ${tokenSymbol}`
+    //         );
+
+    //         if (buySuccess) {
+    //           state.boughtPrice = await getTokenPrice(tokenAddress, BASE_TOKEN_ADDRESS);
+    //           state.currentHolding = tokenSymbol;
+    //           console.log(`✅ Bought ${tokenSymbol} at ${state.boughtPrice}`);
+    //           await saveBotState();
+    //           break;
+    //         }
+    //       } else {
+    //         console.log(`ℹ️ Buy attempt for ${tokenSymbol} failed. Adding to tradedTokens for this session.`);
+    //           tradedTokens.add(tokenSymbol); // Mark as tried and failed for this session
+    //           await saveBotState();
+    //       }
+    //     }
+    //   }
+    // } catch (err) {
+    //   console.error('❌ Error in runTradingBot():', err.message);
+    // }
+
+
+  try { 
+        if (!global.botStateLoaded) {
+      await loadBotState();
+      global.botStateLoaded = true;
+
+
+    // Initial BUSD approval
+      if (!state.initialBUSDApprovalSet) {
         try {
-          await sendTransaction(
-            contractInstance.addNewAsset(tokenSymbol, tokenAddress),
-            `Adding asset: ${tokenSymbol}`
+          const approvalTxSuccess = await sendTransaction(
+            contractInstance.setAssets(BASE_TOKEN_ADDRESS),
+            `Initial approval for ${BASE_TOKEN}`
           );
+          state.initialBUSDApprovalSet = approvalTxSuccess || initialBUSDApprovalSet;
         } catch (err) {
-          console.error(`❌ Failed to add ${tokenSymbol}:`, err.message);
-          continue;
-        }
-
-        // Set approval
-        try {
-          await sendTransaction(
-            contractInstance.setAssets(tokenAddress),
-            `Approving: ${tokenSymbol}`
-          );
-        } catch (err) {
-          console.error(`❌ Failed to approve ${tokenSymbol}:`, err.message);
-          continue;
-        }
-
-        // Execute buy
-        const depositBalance = await contractInstance.getDepositBalance(BASE_TOKEN_ADDRESS);
-        if (depositBalance > 0n) {
-          const deadline = Math.floor(Date.now() / 1000) + 300;
-          const minAmountOut = await getMinAmountOut(BASE_TOKEN_ADDRESS, tokenAddress, depositBalance, 0.5);
-
-          const buySuccess = await sendTransaction(
-            contractInstance.buyASSET(
-              BASE_TOKEN_ADDRESS,
-              depositBalance,
-              tokenAddress,
-              minAmountOut,
-              deadline
-            ),
-            `Buying ${tokenSymbol}`
-          );
-
-          if (buySuccess) {
-            state.boughtPrice = await getTokenPrice(tokenAddress, BASE_TOKEN_ADDRESS);
-            state.currentHolding = tokenSymbol;
-            console.log(`✅ Bought ${tokenSymbol} at ${state.boughtPrice}`);
-            await saveBotState();
-            break;
+          if (err.message.includes('ERC20: approve amount exceeds allowance')) {
+            console.log(`ℹ️ ${BASE_TOKEN} already approved`);
+            state.initialBUSDApprovalSet = true;
+          } else {
+            console.error(`❌ Critical: Failed initial approval for ${BASE_TOKEN}:`, err.message);
           }
-        } else {
-          console.log(`ℹ️ Buy attempt for ${tokenSymbol} failed. Adding to tradedTokens for this session.`);
-            tradedTokens.add(tokenSymbol); // Mark as tried and failed for this session
-            await saveBotState();
         }
       }
     }
-  } catch (err) {
-    console.error('❌ Error in runTradingBot():', err.message);
+
+    try {
+      const signalRes = await axios.get(SIGNAL_ENDPOINT);
+      const signals = signalRes.data;
+
+      // Process signal updates for current holding
+      await processNewSignals(signals);
+
+
+      // Selling logic (including stop-loss)
+      if (state.currentHolding) {
+        const holdingTokenAddress = tokenMap[state.currentHolding].toLowerCase();
+        const currentPrice = await getTokenPrice(holdingTokenAddress, BASE_TOKEN_ADDRESS);
+        const { currentTP, currentSL } = state.tokenSettings[state.currentHolding] || {};
+
+
+        //force exit if 4hours lapsed
+        if(forceExit && state.currentHolding) {
+          if(currentPrice && state.boughtPrice) {
+            const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
+            await executeSell(state.currentHolding, holdingTokenAddress, `forced-sold at ${profitPercent.toFixed(2)}%`)
+          }
+          return;
+        }
+
+
+        if (currentPrice && state.boughtPrice) {
+          const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
+          
+          // Stop-loss check
+          if (profitPercent <= -currentSL) {
+            await executeSell(state.currentHolding, holdingTokenAddress, `stop-loss at ${profitPercent.toFixed(2)}%`);
+            return;
+          }
+          
+          // Take-profit check
+          if (profitPercent >= currentTP) {
+            await executeSell(state.currentHolding, holdingTokenAddress, `profit at ${profitPercent.toFixed(2)}%`);
+            return;
+          }
+          
+          console.log(`⏳ ${state.currentHolding}: ${profitPercent.toFixed(2)}% (TP: ${currentTP}% | SL: -${currentSL}%)`);
+        }
+      }
+
+      // Buying logic
+      if (!state.currentHolding) {
+          //   const sortedSignals = signals
+          // .filter(s => s.signal === 'Buy')
+          // .map(signal => ({
+          //   ...signal,
+          //   score: calculateBuyScore(signal) // Implement scoring function
+          // }))
+          // .sort((a, b) => b.score - a.score);
+          const prioritizedSignals = signals
+          .filter(signal => shouldExecuteBuy(signal)) // Only valid signals
+          .sort((a, b) => calculateBuyScore(b) - calculateBuyScore(a)); // Best first
+
+        for (const signal of prioritizedSignals) {
+          const tokenSymbol = signal.pairName.split('/')[0];
+          const tokenAddress = signal.pairAddress;
+
+          // if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
+
+          console.log(`Processing buy signal for ${tokenSymbol}...`);
+
+          // Add token to local map if not known
+          if (!tokenMap[tokenSymbol]) {
+            tokenMap[tokenSymbol] = tokenAddress;
+            console.log(`📝 Added ${tokenSymbol} to local tokenMap.`);
+          }
+
+          // Add to allowed tokens
+          try {
+            await sendTransaction(
+              contractInstance.addNewAsset(tokenSymbol, tokenAddress),
+              `Adding asset: ${tokenSymbol}`
+            );
+          } catch (err) {
+            console.error(`❌ Failed to add ${tokenSymbol}:`, err.message);
+            continue;
+          }
+
+          // Set approval
+          try {
+            await sendTransaction(
+              contractInstance.setAssets(tokenAddress),
+              `Approving: ${tokenSymbol}`
+            );
+          } catch (err) {
+            console.error(`❌ Failed to approve ${tokenSymbol}:`, err.message);
+            continue;
+          }
+
+          // Execute buy
+          const depositBalance = await contractInstance.getDepositBalance(BASE_TOKEN_ADDRESS);
+          if (depositBalance > 0n) {
+            const deadline = Math.floor(Date.now() / 1000) + 300;
+            const minAmountOut = await getMinAmountOut(BASE_TOKEN_ADDRESS, tokenAddress, depositBalance, 0.5);
+
+            const buySuccess = await sendTransaction(
+              contractInstance.buyASSET(
+                BASE_TOKEN_ADDRESS,
+                depositBalance,
+                tokenAddress,
+                minAmountOut,
+                deadline
+              ),
+              `Buying ${tokenSymbol}`
+            );
+
+            if (buySuccess) {
+              state.boughtPrice = await getTokenPrice(tokenAddress, BASE_TOKEN_ADDRESS);
+              state.currentHolding = tokenSymbol;
+              console.log(`✅ Bought ${tokenSymbol} at ${state.boughtPrice}`);
+              await saveBotState();
+              break;
+            }
+          } else {
+            console.log(`ℹ️ Buy attempt for ${tokenSymbol} failed. Adding to tradedTokens for this session.`);
+              tradedTokens.add(tokenSymbol); // Mark as tried and failed for this session
+              await saveBotState();
+          }
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error in runTradingBot():', err.message);
+    }
+
+    
+  } catch (error) {
+     console.error("[Bot Error]", err.message || err);
+    
+  }finally {
+    isRunning = false;
   }
+
+  
+  
+
+
 }
 
 async function getTokenPrice(tokenA, tokenB) {

@@ -17,7 +17,7 @@ const TRADING_WINDOWS = [
     "0 17 * * *",   // 17:00 UTC
     "0 21 * * *"    // 21:00 UTC
 ];
-const TRADING_DURATION_MINUTES = 15;
+const TRADING_DURATION_MINUTES = 1;
 const HOLDING_DURATION_HOURS = 4;
 const MIN_PROFIT_TO_HOLD = 0.3; // 0.3%
 
@@ -52,8 +52,28 @@ function initTradingBot() {
             
             // Start immediate execution
             await executeTradingCycle();
+        },{
+            timezone: "UTC"
         });
     });
+
+
+    //  // 🧪 Manual trigger at startup (for testing)
+    // setTimeout(async () => {
+    //     const now = new Date();
+    //     tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
+    //     tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 3600000);
+        
+    //     tradingState.isActive = true;
+    //     tradingState.currentTrade = null;
+
+    //     console.log('\n🚀 MANUAL TRADING WINDOW TRIGGERED (Startup Test)');
+    //     console.log(`⏳ Trading allowed until: ${tradingState.tradingWindowEnd.toUTCString()}`);
+    //     console.log(`⏳ Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}\n`);
+
+    //     await executeTradingCycle();
+    // }, 2000); // 2 second delay
+
 
     // Setup periodic checks for force exits
     setInterval(async () => {
