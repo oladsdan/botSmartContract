@@ -58,21 +58,21 @@ function initTradingBot() {
     });
 
 
-    //  // 🧪 Manual trigger at startup (for testing)
-    // setTimeout(async () => {
-    //     const now = new Date();
-    //     tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
-    //     tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 3600000);
+     // 🧪 Manual trigger at startup (for testing)
+    setTimeout(async () => {
+        const now = new Date();
+        tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
+        tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 3600000);
         
-    //     tradingState.isActive = true;
-    //     tradingState.currentTrade = null;
+        tradingState.isActive = true;
+        tradingState.currentTrade = null;
 
-    //     console.log('\n🚀 MANUAL TRADING WINDOW TRIGGERED (Startup Test)');
-    //     console.log(`⏳ Trading allowed until: ${tradingState.tradingWindowEnd.toUTCString()}`);
-    //     console.log(`⏳ Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}\n`);
+        console.log('\n🚀 MANUAL TRADING WINDOW TRIGGERED (Startup Test)');
+        console.log(`⏳ Trading allowed until: ${tradingState.tradingWindowEnd.toUTCString()}`);
+        console.log(`⏳ Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}\n`);
 
-    //     await executeTradingCycle();
-    // }, 2000); // 2 second delay
+        await executeTradingCycle();
+    }, 2000); // 2 second delay
 
 
     // Setup periodic checks for force exits
