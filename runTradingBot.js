@@ -212,7 +212,7 @@ async function executeSell(tokenSymbol, tokenAddress, reason, tradingState, save
 }
 
 
-// let isRunning = false;
+let isRunning = false;
 async function runTradingBot(forceExit = false, tradingState = {}, saveTradeState = () => {}) {
     if (!state.currentHolding && tradingState.currentTrade?.token) {
         state.currentHolding = tradingState.currentTrade.token;
@@ -223,12 +223,12 @@ async function runTradingBot(forceExit = false, tradingState = {}, saveTradeStat
         };
     }
 
-  // if (isRunning) {
-  //   console.log("⏳ Bot already running — skipping this cycle");
-  //   return;
-  // }
+  if (isRunning) {
+    console.log("⏳ Bot already running — skipping this cycle");
+    return;
+  }
 
-  // isRunning = true;
+  isRunning = true;
 
   try { 
     //     if (!global.botStateLoaded) {
