@@ -1,14 +1,11 @@
 import axios from 'axios';
 // import { ethers } from 'ethers';
-import { ethers, parseUnits, formatUnits } from 'ethers';
-// import { contractInstance, tokenMap, provider, ownerSigner } from './contractConfig.js'; // assumed setup
-// import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json";
-// import PancakeSwapRouterABI from "./contracts/PancakeSwapRouterABI.json";
+import { ethers, parseUnits, formatUnits, formatEther } from 'ethers';
 import AutomatedTradingBotABI from "./contracts/AutomatedTradingBotABI.json" assert { type: "json" };
 import PancakeSwapRouterABI from "./contracts/PancakeswapRouterABI.json" assert { type: "json" };
 import {tokenMap} from './config/tokenMap.js';
 import dotenv from 'dotenv';
-import fs from 'fs/promises';
+
 
 dotenv.config();
 
@@ -17,11 +14,19 @@ const SIGNAL_ENDPOINT = "https://bot.securearbitrage.com/api/signals";
 
 const STATE_FILE = './botState.json'; //file to store bot state
 
+const ERC20_ABI = [
+  "function balanceOf(address account) view returns (uint256)"
+];
+
+const CONTRACT_ADDRESS = process.env.BOT_CONTRACT;
+
 const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC_URL);
 const ownerSigner = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
+
+
 const contractInstance = new ethers.Contract(
-  process.env.BOT_CONTRACT,
+  CONTRACT_ADDRESS,
   AutomatedTradingBotABI,
   ownerSigner
 );
@@ -32,6 +37,9 @@ const BASE_TOKEN = 'BUSD';
 const BASE_TOKEN_ADDRESS = tokenMap[BASE_TOKEN].toLowerCase();
 const PROFIT_TARGET_PERCENT = 1.6;
 const STOP_LOSS_PERCENT = 0.9;
+
+
+const busdTokenContract = new ethers.Contract(BASE_TOKEN_ADDRESS, ERC20_ABI, provider);
 
 //Bots internal state variables
 
@@ -99,30 +107,6 @@ async function sendTransaction(transactionPromise, transactionName) {
   }
   return false; // Default return for nonce errors or already allowed
 }
-
-// async function sendTransaction(transactionPromise, transactionName) {
-//   try {
-//     const tx = await transactionPromise;
-//     await tx.wait();
-//     console.log(`✅ ${transactionName} successful! Transaction hash: ${tx.hash}`);
-//     return true;
-//   } catch (error) {
-//     if (error.code === 'NONCE_EXPIRED' || error.message.includes('nonce too low')) {
-//       console.warn(`⚠️ Nonce error for ${transactionName}. This might resolve on next attempt or a restart.`);
-//       return false; // Treat nonce errors as non-success for this attempt
-//     } else if (error.code === 'CALL_EXCEPTION') {
-//       console.error(`❌ Failed to complete ${transactionName}: Contract execution reverted. Details: ${error.message}`);
-//       return false; // Explicitly return false for contract reverts
-//     } else if (error.message.includes('already allowed') || error.message.includes('Token already allowed') || error.message.includes('approve amount exceeds allowance')) {
-//       console.log(`ℹ️ Token already allowed/approved: ${transactionName.split(':')[1]?.trim() || transactionName}`);
-//       return false; // Indicate that it was already allowed/approved
-//     } else {
-//       console.error(`❌ Failed to complete ${transactionName}:`, error.message);
-//       throw error; // Re-throw other unexpected errors
-//     }
-//   }
-// }
-
 function shouldExecuteBuy(signal) {
     const tokenSymbol = signal.pairName.split('/')[0];
     const baseConditions = (
@@ -162,78 +146,7 @@ function shouldExecuteBuy(signal) {
     return score >= 2; // Minimum threshold score
 }
 
-// async function loadBotState() {
-//   try {
-//     const data = await fs.readFile(STATE_FILE, 'utf8');
-//     const state = JSON.parse(data);
 
-//     currentHolding = state.currentHolding;
-//     boughtPrice = state.boughtPrice;
-//     tradedTokens = new Set(state.tradedTokens); // Convert array back to Set
-//     initialBUSDApprovalSet = state.initialBUSDApprovalSet; // Load the flag
-
-//     console.log('✅ Bot state loaded successfully.');
-//     if (currentHolding) {
-//         console.log(`Resuming with current holding: ${currentHolding} (bought at ${boughtPrice})`);
-//     }
-//     console.log(`Previously traded tokens: ${[...tradedTokens].join(', ')}`);
-
-//   } catch (error) {
-//     if (error.code === 'ENOENT') {
-//       console.log('ℹ️ No existing bot state file found. Starting fresh.');
-//     } else {
-//       console.error('❌ Error loading bot state:', error.message);
-//     }
-//   }
-// }
-
-async function loadBotState() {
-  try {
-    const data = await fs.readFile(STATE_FILE, 'utf8');
-    const savedState = JSON.parse(data);
-    state = {
-      ...state,
-      ...savedState,
-      tradedTokens: new Set(savedState.tradedTokens || [])
-    };
-    console.log('✅ State loaded');
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      console.log('ℹ️ No existing state file - starting fresh');
-    } else {
-      console.error('❌ Error loading state:', error.message);
-    }
-  }
-}
-
-
-// async function saveBotState() {
-//   try {
-//     const state = {
-//       currentHolding,
-//       boughtPrice,
-//       tradedTokens: [...tradedTokens], // Convert Set to Array for JSON serialization
-//       initialBUSDApprovalSet // Save the flag
-//     };
-//     await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
-//     console.log('💾 Bot state saved.');
-//   } catch (error) {
-//     console.error('❌ Error saving bot state:', error.message);
-//   }
-// }
-
-
-async function saveBotState() {
-  try {
-    await fs.writeFile(STATE_FILE, JSON.stringify({
-      ...state,
-      tradedTokens: [...state.tradedTokens]
-    }, null, 2));
-    console.log('💾 State saved');
-  } catch (error) {
-    console.error('❌ Error saving state:', error.message);
-  }
-}
 
 async function processNewSignals(signals) {
   for (const signal of signals) {
@@ -250,20 +163,22 @@ async function processNewSignals(signals) {
       state.tokenSettings[tokenSymbol].currentSL = newSL;
       
       console.log(`🔄 Updated ${tokenSymbol} TP/SL: ${newTP}%/${newSL}%`);
-      await saveBotState();
+      // await saveBotState();
     }
   }
 }
 
 
-async function executeSell(tokenSymbol, tokenAddress, reason) {
+async function executeSell(tokenSymbol, tokenAddress, reason, tradingState, saveTradeState) {
   try {
     const holdingBalance = await contractInstance.getTokenBalance(tokenAddress);
     if (holdingBalance <= 0n) {
       console.log(`ℹ️ No ${tokenSymbol} balance to sell.`);
       state.currentHolding = null;
       state.boughtPrice = null;
-      await saveBotState();
+      tradingState.currentTrade = null;
+      saveTradeState();
+      // await saveBotState();
       return;
     }
 
@@ -287,7 +202,9 @@ async function executeSell(tokenSymbol, tokenAddress, reason) {
       tradedTokens.add(tokenSymbol);
       state.currentHolding = null;
       state.boughtPrice = null;
-      await saveBotState();
+      tradingState.currentTrade = null;
+      saveTradeState();
+      // await saveBotState();
     }
   } catch (err) {
     console.error(`❌ Failed to sell ${tokenSymbol}:`, err.message);
@@ -296,174 +213,33 @@ async function executeSell(tokenSymbol, tokenAddress, reason) {
 
 
 let isRunning = false;
-async function runTradingBot(forceExit = false) {
+async function runTradingBot(forceExit = false, tradingState = {}, saveTradeState = () => {}) {
+    if (!state.currentHolding && tradingState.currentTrade?.token) {
+        state.currentHolding = tradingState.currentTrade.token;
+        state.boughtPrice = tradingState.currentTrade.entryPrice;
+        state.tokenSettings[state.currentHolding] = {
+        currentTP: tradingState.currentTrade.targetProfitPercent,
+        currentSL: tradingState.currentTrade.stopLossPercent
+        };
+    }
+
   if (isRunning) {
     console.log("⏳ Bot already running — skipping this cycle");
     return;
   }
 
   isRunning = true;
-    //   if (!global.botStateLoaded) {
+
+  try { 
+    //     if (!global.botStateLoaded) {
     //   await loadBotState();
     //   global.botStateLoaded = true;
 
-
     // // Initial BUSD approval
-    //   if (!state.initialBUSDApprovalSet) {
-    //     try {
-    //       const approvalTxSuccess = await sendTransaction(
-    //         contractInstance.setAssets(BASE_TOKEN_ADDRESS),
-    //         `Initial approval for ${BASE_TOKEN}`
-    //       );
-    //       state.initialBUSDApprovalSet = approvalTxSuccess || initialBUSDApprovalSet;
-    //     } catch (err) {
-    //       if (err.message.includes('ERC20: approve amount exceeds allowance')) {
-    //         console.log(`ℹ️ ${BASE_TOKEN} already approved`);
-    //         state.initialBUSDApprovalSet = true;
-    //       } else {
-    //         console.error(`❌ Critical: Failed initial approval for ${BASE_TOKEN}:`, err.message);
-    //       }
-    //     }
-    //   }
+     
     // }
 
-    // try {
-    //   const signalRes = await axios.get(SIGNAL_ENDPOINT);
-    //   const signals = signalRes.data;
-
-    //   // Process signal updates for current holding
-    //   await processNewSignals(signals);
-
-
-    //   // Selling logic (including stop-loss)
-    //   if (state.currentHolding) {
-    //     const holdingTokenAddress = tokenMap[state.currentHolding].toLowerCase();
-    //     const currentPrice = await getTokenPrice(holdingTokenAddress, BASE_TOKEN_ADDRESS);
-    //     const { currentTP, currentSL } = state.tokenSettings[state.currentHolding] || {};
-
-
-    //     //force exit if 4hours lapsed
-    //     if(forceExit && state.currentHolding) {
-    //       if(currentPrice && state.boughtPrice) {
-    //         const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
-    //         await executeSell(state.currentHolding, holdingTokenAddress, `forced-sold at ${profitPercent.toFixed(2)}%`)
-    //       }
-    //       return;
-    //     }
-
-
-    //     if (currentPrice && state.boughtPrice) {
-    //       const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
-          
-    //       // Stop-loss check
-    //       if (profitPercent <= -currentSL) {
-    //         await executeSell(state.currentHolding, holdingTokenAddress, `stop-loss at ${profitPercent.toFixed(2)}%`);
-    //         return;
-    //       }
-          
-    //       // Take-profit check
-    //       if (profitPercent >= currentTP) {
-    //         await executeSell(state.currentHolding, holdingTokenAddress, `profit at ${profitPercent.toFixed(2)}%`);
-    //         return;
-    //       }
-          
-    //       console.log(`⏳ ${state.currentHolding}: ${profitPercent.toFixed(2)}% (TP: ${currentTP}% | SL: -${currentSL}%)`);
-    //     }
-    //   }
-
-    //   // Buying logic
-    //   if (!state.currentHolding) {
-    //       //   const sortedSignals = signals
-    //       // .filter(s => s.signal === 'Buy')
-    //       // .map(signal => ({
-    //       //   ...signal,
-    //       //   score: calculateBuyScore(signal) // Implement scoring function
-    //       // }))
-    //       // .sort((a, b) => b.score - a.score);
-    //       const prioritizedSignals = signals
-    //       .filter(signal => shouldExecuteBuy(signal)) // Only valid signals
-    //       .sort((a, b) => calculateBuyScore(b) - calculateBuyScore(a)); // Best first
-
-    //     for (const signal of prioritizedSignals) {
-    //       const tokenSymbol = signal.pairName.split('/')[0];
-    //       const tokenAddress = signal.pairAddress;
-
-    //       // if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
-
-    //       console.log(`Processing buy signal for ${tokenSymbol}...`);
-
-    //       // Add token to local map if not known
-    //       if (!tokenMap[tokenSymbol]) {
-    //         tokenMap[tokenSymbol] = tokenAddress;
-    //         console.log(`📝 Added ${tokenSymbol} to local tokenMap.`);
-    //       }
-
-    //       // Add to allowed tokens
-    //       try {
-    //         await sendTransaction(
-    //           contractInstance.addNewAsset(tokenSymbol, tokenAddress),
-    //           `Adding asset: ${tokenSymbol}`
-    //         );
-    //       } catch (err) {
-    //         console.error(`❌ Failed to add ${tokenSymbol}:`, err.message);
-    //         continue;
-    //       }
-
-    //       // Set approval
-    //       try {
-    //         await sendTransaction(
-    //           contractInstance.setAssets(tokenAddress),
-    //           `Approving: ${tokenSymbol}`
-    //         );
-    //       } catch (err) {
-    //         console.error(`❌ Failed to approve ${tokenSymbol}:`, err.message);
-    //         continue;
-    //       }
-
-    //       // Execute buy
-    //       const depositBalance = await contractInstance.getDepositBalance(BASE_TOKEN_ADDRESS);
-    //       if (depositBalance > 0n) {
-    //         const deadline = Math.floor(Date.now() / 1000) + 300;
-    //         const minAmountOut = await getMinAmountOut(BASE_TOKEN_ADDRESS, tokenAddress, depositBalance, 0.5);
-
-    //         const buySuccess = await sendTransaction(
-    //           contractInstance.buyASSET(
-    //             BASE_TOKEN_ADDRESS,
-    //             depositBalance,
-    //             tokenAddress,
-    //             minAmountOut,
-    //             deadline
-    //           ),
-    //           `Buying ${tokenSymbol}`
-    //         );
-
-    //         if (buySuccess) {
-    //           state.boughtPrice = await getTokenPrice(tokenAddress, BASE_TOKEN_ADDRESS);
-    //           state.currentHolding = tokenSymbol;
-    //           console.log(`✅ Bought ${tokenSymbol} at ${state.boughtPrice}`);
-    //           await saveBotState();
-    //           break;
-    //         }
-    //       } else {
-    //         console.log(`ℹ️ Buy attempt for ${tokenSymbol} failed. Adding to tradedTokens for this session.`);
-    //           tradedTokens.add(tokenSymbol); // Mark as tried and failed for this session
-    //           await saveBotState();
-    //       }
-    //     }
-    //   }
-    // } catch (err) {
-    //   console.error('❌ Error in runTradingBot():', err.message);
-    // }
-
-
-  try { 
-        if (!global.botStateLoaded) {
-      await loadBotState();
-      global.botStateLoaded = true;
-
-
-    // Initial BUSD approval
-      if (!initialBUSDApprovalSet) {
+     if (!initialBUSDApprovalSet) {
         try {
           const approvalTxSuccess = await sendTransaction(
             contractInstance.setAssets(BASE_TOKEN_ADDRESS),
@@ -479,7 +255,6 @@ async function runTradingBot(forceExit = false) {
           }
         }
       }
-    }
 
     try {
       const signalRes = await axios.get(SIGNAL_ENDPOINT);
@@ -493,117 +268,138 @@ async function runTradingBot(forceExit = false) {
       if (state.currentHolding) {
         const holdingTokenAddress = tokenMap[state.currentHolding].toLowerCase();
         const currentPrice = await getTokenPrice(holdingTokenAddress, BASE_TOKEN_ADDRESS);
+        console.log("this is currentPrice", currentPrice)
         const { currentTP, currentSL } = state.tokenSettings[state.currentHolding] || {};
 
 
         //force exit if 4hours lapsed
         if(forceExit && state.currentHolding) {
-          if(currentPrice && state.boughtPrice) {
             const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
-            await executeSell(state.currentHolding, holdingTokenAddress, `forced-sold at ${profitPercent.toFixed(2)}%`)
-          }
+            await executeSell(state.currentHolding, holdingTokenAddress, `forced-sold after 4hrs at ${profitPercent.toFixed(2)}%`,     tradingState, saveTradeState)
           return;
         }
 
-
+          // now we check if sl and Tp is reached
         if (currentPrice && state.boughtPrice) {
           const profitPercent = ((currentPrice - state.boughtPrice) / state.boughtPrice) * 100;
           
           // Stop-loss check
           if (profitPercent <= -currentSL) {
-            await executeSell(state.currentHolding, holdingTokenAddress, `stop-loss at ${profitPercent.toFixed(2)}%`);
+            await executeSell(state.currentHolding, holdingTokenAddress, `stop-loss at ${profitPercent.toFixed(2)}%`, tradingState, saveTradeState);
             return;
           }
           
           // Take-profit check
           if (profitPercent >= currentTP) {
-            await executeSell(state.currentHolding, holdingTokenAddress, `profit at ${profitPercent.toFixed(2)}%`);
+            await executeSell(state.currentHolding, holdingTokenAddress, `profit at ${profitPercent.toFixed(2)}%`, tradingState, saveTradeState);
             return;
           }
           
-          console.log(`⏳ ${state.currentHolding}: ${profitPercent.toFixed(2)}% (TP: ${currentTP}% | SL: -${currentSL}%)`);
+          console.log(`⏳ ${state.currentHolding}: ${profitPercent.toFixed(2)}% (TP: ${currentTP.toFixed(2)}% | SL: -${currentSL.toFixed(2)}%)`);
         }
       }
 
       // Buying logic
       if (!state.currentHolding) {
-          //   const sortedSignals = signals
-          // .filter(s => s.signal === 'Buy')
-          // .map(signal => ({
-          //   ...signal,
-          //   score: calculateBuyScore(signal) // Implement scoring function
-          // }))
-          // .sort((a, b) => b.score - a.score);
           const prioritizedSignals = signals
           .filter(signal => shouldExecuteBuy(signal)) // Only valid signals
           .sort((a, b) => calculateBuyScore(b) - calculateBuyScore(a)); // Best first
 
-        for (const signal of prioritizedSignals) {
-          const tokenSymbol = signal.pairName.split('/')[0];
-          const tokenAddress = signal.pairAddress;
+          for (const signal of prioritizedSignals) {
+            const tokenSymbol = signal.pairName.split('/')[0];
+            const tokenAddress = signal.pairAddress;
 
-          // if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
+            // if (signal.signal !== 'Buy' || tradedTokens.has(tokenSymbol)) continue;
 
-          console.log(`Processing buy signal for ${tokenSymbol}...`);
+            console.log(`Processing buy signal for ${tokenSymbol}...`);
 
-          // Add token to local map if not known
-          if (!tokenMap[tokenSymbol]) {
-            tokenMap[tokenSymbol] = tokenAddress;
-            console.log(`📝 Added ${tokenSymbol} to local tokenMap.`);
-          }
-
-          // Add to allowed tokens
-          try {
-            await sendTransaction(
-              contractInstance.addNewAsset(tokenSymbol, tokenAddress),
-              `Adding asset: ${tokenSymbol}`
-            );
-          } catch (err) {
-            console.error(`❌ Failed to add ${tokenSymbol}:`, err.message);
-            continue;
-          }
-
-          // Set approval
-          try {
-            await sendTransaction(
-              contractInstance.setAssets(tokenAddress),
-              `Approving: ${tokenSymbol}`
-            );
-          } catch (err) {
-            console.error(`❌ Failed to approve ${tokenSymbol}:`, err.message);
-            continue;
-          }
-
-          // Execute buy
-          const depositBalance = await contractInstance.getDepositBalance(BASE_TOKEN_ADDRESS);
-          if (depositBalance > 0n) {
-            const deadline = Math.floor(Date.now() / 1000) + 300;
-            const minAmountOut = await getMinAmountOut(BASE_TOKEN_ADDRESS, tokenAddress, depositBalance, 0.5);
-
-            const buySuccess = await sendTransaction(
-              contractInstance.buyASSET(
-                BASE_TOKEN_ADDRESS,
-                depositBalance,
-                tokenAddress,
-                minAmountOut,
-                deadline
-              ),
-              `Buying ${tokenSymbol}`
-            );
-
-            if (buySuccess) {
-              state.boughtPrice = await getTokenPrice(tokenAddress, BASE_TOKEN_ADDRESS);
-              state.currentHolding = tokenSymbol;
-              console.log(`✅ Bought ${tokenSymbol} at ${state.boughtPrice}`);
-              await saveBotState();
-              break;
+            // Add token to local map if not known
+            if (!tokenMap[tokenSymbol]) {
+              tokenMap[tokenSymbol] = tokenAddress;
+              console.log(`📝 Added ${tokenSymbol} to local tokenMap.`);
             }
-          } else {
-            console.log(`ℹ️ Buy attempt for ${tokenSymbol} failed. Adding to tradedTokens for this session.`);
-              tradedTokens.add(tokenSymbol); // Mark as tried and failed for this session
-              await saveBotState();
+
+            // Add to allowed tokens
+            try {
+              await sendTransaction(
+                contractInstance.addNewAsset(tokenSymbol, tokenAddress),
+                `Adding asset: ${tokenSymbol}`
+              );
+            } catch (err) {
+              console.error(`❌ Failed to add ${tokenSymbol}:`, err.message);
+              continue;
+            }
+
+            // Set approval
+            try {
+              await sendTransaction(
+                contractInstance.setAssets(tokenAddress),
+                `Approving: ${tokenSymbol}`
+              );
+            } catch (err) {
+              console.error(`❌ Failed to approve ${tokenSymbol}:`, err.message);
+              continue;
+            }
+
+            // Execute buy
+            // const depositBalance = await contractInstance.getDepositBalance(BASE_TOKEN_ADDRESS);
+            const depositBalance = await busdTokenContract.balanceOf(CONTRACT_ADDRESS);
+            const formatDeposit = formatEther(depositBalance);
+
+
+            console.log("this is the depositBalance", depositBalance.toString());
+
+            console.log("this is the formateddeposit", formatDeposit);
+
+            
+            if (depositBalance > 0n) {
+              const deadline = Math.floor(Date.now() / 1000) + 300;
+              const minAmountOut = await getMinAmountOut(BASE_TOKEN_ADDRESS, tokenAddress, depositBalance, 0.5);
+
+              console.log("this is the minAmountOut", minAmountOut);
+
+              const buySuccess = await sendTransaction(
+                contractInstance.buyASSET(
+                  BASE_TOKEN_ADDRESS,
+                  depositBalance,
+                  tokenAddress,
+                  minAmountOut,
+                  deadline
+                ),
+                `Buying ${tokenSymbol}`
+              );
+
+              if (buySuccess) {
+                const entryPrice = await getTokenPrice(tokenAddress, BASE_TOKEN_ADDRESS);
+                state.boughtPrice = entryPrice;
+                state.currentHolding = tokenSymbol;
+
+                const tp = parseFloat(signal.tpPercentage);
+                const sl = parseFloat(signal.slPercentage);
+
+                state.tokenSettings[tokenSymbol] = { currentTP: tp, currentSL: sl };
+
+                 tradingState.currentTrade = {
+                 token: tokenSymbol,
+                 entryPrice,
+                 entryTime: new Date(),
+                 holdingPeriodEnd: tradingState.holdingPeriodEnd,
+                 stopLossPercent: sl,
+                 targetProfitPercent: tp
+                };
+
+                console.log(`✅ Bought ${tokenSymbol} at ${entryPrice}`);
+                // await saveBotState();
+                saveTradeState();
+                break;
+              }
+            } else {
+              console.log(`ℹ️ Buy attempt for ${tokenSymbol} failed. Adding to tradedTokens for this session.`);
+                tradedTokens.add(tokenSymbol); // Mark as tried and failed for this session
+                // await saveBotState();
+                // saveTradeState();
+            }
           }
-        }
       }
     } catch (err) {
       console.error('❌ Error in runTradingBot():', err.message);
@@ -617,22 +413,10 @@ async function runTradingBot(forceExit = false) {
     isRunning = false;
   }
 
-  
-  
-
-
 }
 
 async function getTokenPrice(tokenA, tokenB) {
-  // try {
-  //   const path = [tokenA, tokenB];
-  //   const amountIn = ethers.utils.parseUnits('1', 18);
-  //   const amountsOut = await contractInstance.pancakeSwapRouter().getAmountsOut(amountIn, path);
-  //   return parseFloat(ethers.utils.formatUnits(amountsOut[1], 18));
-  // } catch (e) {
-  //   console.warn(`⚠️ getTokenPrice fallback triggered for ${tokenA}/${tokenB}`);
-  //   return null;
-  // }
+
   try {
     const pancakeRouterAddress = await contractInstance.pancakeSwapRouter();
     const router = new ethers.Contract(pancakeRouterAddress, PancakeSwapRouterABI, provider);
