@@ -123,65 +123,7 @@ async function periodicCheck() {
   }
 }
 
-// === Init Bot ===
-// function initTradingBot() {
-//   console.log("🚀 Initializing Trading Bot");
-//   loadTradeState();
 
-//   TRADING_WINDOWS.forEach(schedule => {
-//     cron.schedule(schedule, async () => {
-//       const now = new Date();
-//       tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
-//       tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 60 * 60 * 1000);
-//       tradingState.isActive = true;
-//       tradingState.currentTrade = null;
-
-//       console.log("\n=== TRADING WINDOW START ===");
-//       console.log(`🕒 Start: ${now.toUTCString()}`);
-//       console.log(`🛑 Ends: ${tradingState.tradingWindowEnd.toUTCString()}`);
-//       console.log(`📈 Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}`);
-//       console.log("============================\n");
-
-//       await executeTradingCycle();
-//     }, { timezone: "UTC" });
-//   });
-
-//   // Manual trigger on startup
-//   setTimeout(async () => {
-//     const now = new Date();
-//     tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
-//     tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 60 * 60 * 1000);
-//     tradingState.isActive = true;
-//     tradingState.currentTrade = null;
-
-//     console.log("\n🚀 MANUAL TRADING START");
-//     console.log(`🕒 Trading until: ${tradingState.tradingWindowEnd.toUTCString()}`);
-//     console.log(`📈 Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}`);
-//     await executeTradingCycle();
-//   }, 2000);
-
-//   // Force exit if holding period expired
-//   setInterval(async () => {
-//     const now = new Date();
-//     if (tradingState.currentTrade && now >= new Date(tradingState.holdingPeriodEnd)) {
-//       console.log("⏰ Holding period expired – forcing exit");
-//       try {
-//         await runTradingBot(true, tradingState, saveTradeState);
-//         tradingState.currentTrade = null;
-//         saveTradeState();
-//       } catch (e) {
-//         console.error("❌ Force-exit failed:", e.message);
-//       }
-//     }
-//   }, 60000);
-
-//   // Run periodic trade checks (TP/SL)
-//   setInterval(async () => {
-//     if (tradingState.isActive || tradingState.currentTrade) {
-//       await executeTradingCycle();
-//     }
-//   }, 10000);
-// }
 
 async function initTradingBot() {
   console.log("🚀 Initializing Trading Bot");
