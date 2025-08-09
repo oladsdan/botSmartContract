@@ -46,11 +46,6 @@ async function loadTradeState() {
   }
 }
 
-
-// function saveTradeState() {
-//   fs.writeFileSync(STATE_FILE, JSON.stringify({ currentTrade: tradingState.currentTrade }, null, 2));
-// }
-
 // === Trading Loop ===
 async function saveTradeState() {
   await fs.writeFile(STATE_FILE, JSON.stringify(tradingState, null, 2));
