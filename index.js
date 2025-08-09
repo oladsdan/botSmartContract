@@ -4,10 +4,11 @@ import cron from "node-cron";
 import fs from "fs";
 import runTradingBot from "./runTradingBot.js";
 
+
 dotenv.config();
 
 // === Config ===
-const TRADING_DURATION_MINUTES = 1;
+const TRADING_DURATION_MINUTES = 5;
 const HOLDING_DURATION_HOURS = 4;
 const STATE_FILE = './botState.json';
 
@@ -23,19 +24,34 @@ const TRADING_WINDOWS = [
 // === Global Trading State ===
 export const tradingState = {
   isActive: false,
-  currentTrade: null,
+  activeTrades: [],
   tradingWindowEnd: null,
   holdingPeriodEnd: null
 };
 
-function loadTradeState() {
+// function loadTradeState() {
+//   try {
+//     if (fs.existsSync(STATE_FILE)) {
+//       const data = JSON.parse(fs.readFileSync(STATE_FILE));
+//       if (data.currentTrade) {
+//         tradingState.currentTrade = data.currentTrade;
+//         tradingState.holdingPeriodEnd = new Date(data.currentTrade.holdingPeriodEnd);
+//         console.log("🔁 Restored previous trade:", tradingState.currentTrade);
+//       }
+//     }
+//   } catch (err) {
+//     console.warn("⚠️ Failed to load previous state:", err.message);
+//   }
+// }
+
+async function loadTradeState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(STATE_FILE));
-      if (data.currentTrade) {
-        tradingState.currentTrade = data.currentTrade;
-        tradingState.holdingPeriodEnd = new Date(data.currentTrade.holdingPeriodEnd);
-        console.log("🔁 Restored previous trade:", tradingState.currentTrade);
+      const data = JSON.parse(await fs.readFile(STATE_FILE, 'utf-8'));
+      if (data.activeTrades && data.activeTrades.length > 0) {
+        tradingState.activeTrades = data.activeTrades;
+        tradingState.holdingPeriodEnd = new Date(data.holdingPeriodEnd);
+        console.log(`🔁 Restored ${data.activeTrades.length} previous trade(s).`);
       }
     }
   } catch (err) {
@@ -43,82 +59,159 @@ function loadTradeState() {
   }
 }
 
-function saveTradeState() {
-  fs.writeFileSync(STATE_FILE, JSON.stringify({ currentTrade: tradingState.currentTrade }, null, 2));
-}
+
+// function saveTradeState() {
+//   fs.writeFileSync(STATE_FILE, JSON.stringify({ currentTrade: tradingState.currentTrade }, null, 2));
+// }
 
 // === Trading Loop ===
-async function executeTradingCycle() {
+async function saveTradeState() {
+  await fs.writeFile(STATE_FILE, JSON.stringify(tradingState, null, 2));
+}
+
+// async function executeTradingCycle() {
+//   const now = new Date();
+
+//   if (tradingState.isActive && now > tradingState.tradingWindowEnd) {
+//     console.log("⏰ Trading window expired");
+//     tradingState.isActive = false;
+//   }
+
+//   if (tradingState.isActive || tradingState.currentTrade) {
+//     await runTradingBot(false, tradingState, saveTradeState);
+//   }
+// }
+
+async function executeTradingCycle(options = {}) {
   const now = new Date();
 
   if (tradingState.isActive && now > tradingState.tradingWindowEnd) {
-    console.log("⏰ Trading window expired");
+    console.log("⏰ Trading window expired. No more new buys.");
     tradingState.isActive = false;
+    await saveTradeState(); // Save the state change
   }
 
-  if (tradingState.isActive || tradingState.currentTrade) {
-    await runTradingBot(false, tradingState, saveTradeState);
+  // Pass options to the trading bot (e.g., for force selling)
+  if (tradingState.isActive || tradingState.activeTrades.length > 0) {
+    await runTradingBot(options, tradingState, saveTradeState);
+  }
+}
+
+async function periodicCheck() {
+  try {
+    const now = new Date();
+    
+    // NEW: Logic to sell all tokens 5 mins before the holding period ends.
+    if (tradingState.activeTrades.length > 0 && tradingState.holdingPeriodEnd) {
+        const fiveMinutes = 5 * 60 * 1000;
+        const sellOffTime = new Date(new Date(tradingState.holdingPeriodEnd).getTime() - fiveMinutes);
+
+        if (now >= sellOffTime) {
+            console.log("⏰ Nearing end of holding period. Forcing sell-off of all assets.");
+            await executeTradingCycle({ forceSellAll: true, reason: 'Holding Period Nearing End' });
+            return; // Exit check early after triggering sell-off
+        }
+    }
+    
+    // Regular TP/SL/Trailing Stop check
+    await executeTradingCycle();
+
+  } catch (e) {
+    console.error("❌ Error in periodic check:", e.message);
+  } finally {
+    setTimeout(periodicCheck, 5000); // Check every 5 seconds
   }
 }
 
 // === Init Bot ===
-function initTradingBot() {
+// function initTradingBot() {
+//   console.log("🚀 Initializing Trading Bot");
+//   loadTradeState();
+
+//   TRADING_WINDOWS.forEach(schedule => {
+//     cron.schedule(schedule, async () => {
+//       const now = new Date();
+//       tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
+//       tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 60 * 60 * 1000);
+//       tradingState.isActive = true;
+//       tradingState.currentTrade = null;
+
+//       console.log("\n=== TRADING WINDOW START ===");
+//       console.log(`🕒 Start: ${now.toUTCString()}`);
+//       console.log(`🛑 Ends: ${tradingState.tradingWindowEnd.toUTCString()}`);
+//       console.log(`📈 Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}`);
+//       console.log("============================\n");
+
+//       await executeTradingCycle();
+//     }, { timezone: "UTC" });
+//   });
+
+//   // Manual trigger on startup
+//   setTimeout(async () => {
+//     const now = new Date();
+//     tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
+//     tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 60 * 60 * 1000);
+//     tradingState.isActive = true;
+//     tradingState.currentTrade = null;
+
+//     console.log("\n🚀 MANUAL TRADING START");
+//     console.log(`🕒 Trading until: ${tradingState.tradingWindowEnd.toUTCString()}`);
+//     console.log(`📈 Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}`);
+//     await executeTradingCycle();
+//   }, 2000);
+
+//   // Force exit if holding period expired
+//   setInterval(async () => {
+//     const now = new Date();
+//     if (tradingState.currentTrade && now >= new Date(tradingState.holdingPeriodEnd)) {
+//       console.log("⏰ Holding period expired – forcing exit");
+//       try {
+//         await runTradingBot(true, tradingState, saveTradeState);
+//         tradingState.currentTrade = null;
+//         saveTradeState();
+//       } catch (e) {
+//         console.error("❌ Force-exit failed:", e.message);
+//       }
+//     }
+//   }, 60000);
+
+//   // Run periodic trade checks (TP/SL)
+//   setInterval(async () => {
+//     if (tradingState.isActive || tradingState.currentTrade) {
+//       await executeTradingCycle();
+//     }
+//   }, 10000);
+// }
+
+async function initTradingBot() {
   console.log("🚀 Initializing Trading Bot");
-  loadTradeState();
+  await loadTradeState();
 
   TRADING_WINDOWS.forEach(schedule => {
     cron.schedule(schedule, async () => {
       const now = new Date();
+      // MODIFIED: Reset the activeTrades array for the new window.
+      tradingState.activeTrades = [];
       tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
       tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 60 * 60 * 1000);
       tradingState.isActive = true;
-      tradingState.currentTrade = null;
 
       console.log("\n=== TRADING WINDOW START ===");
       console.log(`🕒 Start: ${now.toUTCString()}`);
-      console.log(`🛑 Ends: ${tradingState.tradingWindowEnd.toUTCString()}`);
+      console.log(`🛑 New buys end: ${tradingState.tradingWindowEnd.toUTCString()}`);
       console.log(`📈 Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}`);
       console.log("============================\n");
-
+      
+      await saveTradeState();
       await executeTradingCycle();
     }, { timezone: "UTC" });
   });
 
-  // Manual trigger on startup
-  setTimeout(async () => {
-    const now = new Date();
-    tradingState.tradingWindowEnd = new Date(now.getTime() + TRADING_DURATION_MINUTES * 60000);
-    tradingState.holdingPeriodEnd = new Date(now.getTime() + HOLDING_DURATION_HOURS * 60 * 60 * 1000);
-    tradingState.isActive = true;
-    tradingState.currentTrade = null;
 
-    console.log("\n🚀 MANUAL TRADING START");
-    console.log(`🕒 Trading until: ${tradingState.tradingWindowEnd.toUTCString()}`);
-    console.log(`📈 Holding until: ${tradingState.holdingPeriodEnd.toUTCString()}`);
-    await executeTradingCycle();
-  }, 2000);
+  console.log("🕒 Bot is waiting for the next scheduled trading window.");
 
-  // Force exit if holding period expired
-  setInterval(async () => {
-    const now = new Date();
-    if (tradingState.currentTrade && now >= new Date(tradingState.holdingPeriodEnd)) {
-      console.log("⏰ Holding period expired – forcing exit");
-      try {
-        await runTradingBot(true, tradingState, saveTradeState);
-        tradingState.currentTrade = null;
-        saveTradeState();
-      } catch (e) {
-        console.error("❌ Force-exit failed:", e.message);
-      }
-    }
-  }, 60000);
-
-  // Run periodic trade checks (TP/SL)
-  setInterval(async () => {
-    if (tradingState.isActive || tradingState.currentTrade) {
-      await executeTradingCycle();
-    }
-  }, 10000);
+  // Start the perpetual check loop
+  periodicCheck();
 }
 
 initTradingBot();
