@@ -15,7 +15,7 @@ const STATE_FILE = './botState.json';
 const TRADING_WINDOWS = [
   "0 1 * * *",
   "0 5 * * *",
-  "0 9 * * *",
+  "58 9 * * *",
   "0 13 * * *",
   "0 17 * * *",
   "0 21 * * *"
@@ -48,7 +48,7 @@ async function loadTradeState() {
 
 // === Trading Loop ===
 async function saveTradeState() {
-  await fs.writeFile(STATE_FILE, JSON.stringify(tradingState, null, 2));
+  await fs.promises.writeFile(STATE_FILE, JSON.stringify(tradingState, null, 2));;
 }
 
 // async function executeTradingCycle() {
