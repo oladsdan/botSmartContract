@@ -72,9 +72,12 @@ global.botStateLoaded = false;
 // }
 async function getMinAmountOut(tokenIn, tokenOut, amountIn, slippagePercent = 0.5) {
   try {
+
+    const AssetIn = tokenIn.toLowerCase();
+    const AssetOut = tokenOut.toLowerCase();
     const pancakeRouterAddress = await contractInstance.pancakeSwapRouter();
     const router = new ethers.Contract(pancakeRouterAddress, PancakeSwapRouterABI, provider);
-    const amountsOut = await router.getAmountsOut(amountIn, [tokenIn, tokenOut]);
+    const amountsOut = await router.getAmountsOut(amountIn, [AssetIn, AssetOut]);
 
     const expectedOut = amountsOut[1];
     const slippage = (expectedOut * BigInt(Math.round(slippagePercent * 100))) / 10000n;
@@ -358,7 +361,7 @@ async function runTradingBot(options = {}, tradingState, saveTradeState = () => 
           const amountPerBuy = depositBalance / BigInt(slotsToFill);
           const amountPerBuyFloat = parseFloat(formatUnits(amountPerBuy, 18));
 
-           if (amountPerBuyFloat < MIN_USD_PER_TRADE  * slotsToFill) {
+           if (amountPerBuyFloat < MIN_USD_PER_TRADE) {
             console.log(`ℹ️ Balance too low to split for more trades. Required ~$${MIN_USD_PER_TRADE * slotsToFill}.`);
             return;
             }
@@ -448,7 +451,7 @@ async function getTokenPrice(tokenA, tokenB) {
   try {
     const pancakeRouterAddress = await contractInstance.pancakeSwapRouter();
     const router = new ethers.Contract(pancakeRouterAddress, PancakeSwapRouterABI, provider);
-    const path = [tokenA, tokenB];
+    const path = [tokenA.toLowerCase(), tokenB.toLowerCase()];
     const amountIn = parseUnits('1', 18);
     const amountsOut = await router.getAmountsOut(amountIn, path);
     return parseFloat(formatUnits(amountsOut[1], 18));

@@ -15,7 +15,7 @@ const STATE_FILE = './botState.json';
 const TRADING_WINDOWS = [
   "0 1 * * *",
   "0 5 * * *",
-  "58 9 * * *",
+  "0 9 * * *",
   "0 13 * * *",
   "0 17 * * *",
   "0 21 * * *"
@@ -34,7 +34,7 @@ export const tradingState = {
 async function loadTradeState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
-      const data = JSON.parse(await fs.readFile(STATE_FILE, 'utf-8'));
+      const data = JSON.parse(await fs.promises.readFile(STATE_FILE, 'utf-8'));
       if (data.activeTrades && data.activeTrades.length > 0) {
         tradingState.activeTrades = data.activeTrades;
         tradingState.holdingPeriodEnd = new Date(data.holdingPeriodEnd);
@@ -48,7 +48,7 @@ async function loadTradeState() {
 
 // === Trading Loop ===
 async function saveTradeState() {
-  await fs.promises.writeFile(STATE_FILE, JSON.stringify(tradingState, null, 2));;
+  await fs.promises.writeFile(STATE_FILE, JSON.stringify(tradingState, null, 2));
 }
 
 // async function executeTradingCycle() {
