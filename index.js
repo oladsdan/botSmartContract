@@ -29,20 +29,7 @@ export const tradingState = {
   holdingPeriodEnd: null
 };
 
-// function loadTradeState() {
-//   try {
-//     if (fs.existsSync(STATE_FILE)) {
-//       const data = JSON.parse(fs.readFileSync(STATE_FILE));
-//       if (data.currentTrade) {
-//         tradingState.currentTrade = data.currentTrade;
-//         tradingState.holdingPeriodEnd = new Date(data.currentTrade.holdingPeriodEnd);
-//         console.log("🔁 Restored previous trade:", tradingState.currentTrade);
-//       }
-//     }
-//   } catch (err) {
-//     console.warn("⚠️ Failed to load previous state:", err.message);
-//   }
-// }
+
 
 async function loadTradeState() {
   try {
